@@ -4,23 +4,56 @@ import itertools
 
 class Gridworld(object):
     def __init__(self, rewards, terminals, misfires, impassable, world_shape, misfire_prob=0.1):
-        self.terminals = terminals
+        self.__terminals = terminals
         assert(terminals.shape == world_shape)
-        self.misfires = misfires
+        self.__misfires = misfires
         assert(misfires.shape == world_shape)
-        self.impassable = impassable
+        self.__impassable = impassable
         assert(impassable.shape == world_shape)
-        self.rewards = rewards
+        self.__rewards = rewards
 
-        self.shape = world_shape
-        self.total_reward = np.zeros(world_shape)
-        for _, vals in self.rewards:
-            self.total_reward += vals
+        self.__shape = world_shape
+        self.__total_reward = np.zeros(world_shape)
+        for _, vals in self.rewards.items():
+            self.__total_reward += vals
             assert(world_shape == vals.shape)
 
-        self.actions = ['u', 'd', 'l', 'r']
-        self.misfire_prob = misfire_prob
+        self.__actions = ['u', 'd', 'l', 'r']
+        self.__misfire_prob = misfire_prob
 
+    @property
+    def terminals(self):
+        return self.__terminals
+
+    @property
+    def misfires(self):
+        return self.__misfires
+
+    @property
+    def impassable(self):
+        return self.__impassable
+
+    @property
+    def rewards(self):
+        return self.__rewards
+
+    @property
+    def shape(self):
+        return self.__shape
+
+    @property
+    def total_reward(self):
+        return self.__total_reward
+
+    @property
+    def actions(self):
+        return self.__actions
+
+    @property
+    def misfire_prob(self):
+        return self.__misfire_prob
+
+    @property
     def states(self):
         return itertools.product(range(self.shape[0]), range(self.shape[1]))
 
