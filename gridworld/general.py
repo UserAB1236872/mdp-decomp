@@ -108,7 +108,7 @@ class Gridworld(object):
         return np.fromfunction(
             lambda x, y: self.transition_prob(state, action, (x, y)), self.shape)
 
-    def __get_elem(self, val, x, y):
+    def __printable_elem(self, val, x, y):
         coord = (x, y)
         if self.impassable[coord]:
             return 'x'
@@ -124,9 +124,9 @@ class Gridworld(object):
 
         for typ, val in self.rewards.values:
             out[typ] = np.fromfunction(
-                lambda x, y: self.__get_elem(val, x, y), self.shape)
+                lambda x, y: self.__printable_elem(val, x, y), self.shape)
 
         out["total"] = np.fromfunction(
-            lambda x, y: self.__get_elem(self.total_reward, x, y), self.shape)
+            lambda x, y: self.__printable_elem(self.total_reward, x, y), self.shape)
 
         return out
