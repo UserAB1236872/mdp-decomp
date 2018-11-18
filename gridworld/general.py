@@ -29,17 +29,17 @@ class Gridworld(object):
     def succ_map(self, state):
         succs = {}
         if state[0] - 1 >= 0 and not self.impassable[state[0] - 1, state[1]]:
-            succs['u'] = (state[0]-1, state[1])
+            succs['u'] = (state[0] - 1, state[1])
         else:
             succs['u'] = state
 
         if state[0] + 1 < self.shape[0] and not self.impassable[state[0] + 1, state[1]]:
-            succs['d'] = (state[0]+1, state[1])
+            succs['d'] = (state[0] + 1, state[1])
         else:
             succs['d'] = state
 
         if state[1] - 1 >= 0 and not self.impassable[state[0], state[1] - 1]:
-            succs['l'] = (state[0], state[1]-1)
+            succs['l'] = (state[0], state[1] - 1)
         else:
             succs['l'] = state
 
@@ -53,7 +53,7 @@ class Gridworld(object):
     def transition_prob(self, state, action, nxt):
         succs = self.succ_map(state)
         assert(action in self.actions)
-        if nxt not in succs.values():
+        if nxt not in succs.values() or self.impassable[nxt]:
             return 0.0
 
         misfires = self.misfires[state]
