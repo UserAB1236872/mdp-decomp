@@ -1,3 +1,7 @@
+import random
+import itertools
+
+
 class QWorld(object):
     def __init__(self, world):
         self.__world = world
@@ -6,7 +10,6 @@ class QWorld(object):
         self.reward_types = [*world.rewards.keys()]
 
     def reset(self):
-        import random
         choice = (random.randint(
             0, self.shape[0] - 1), random.randint(0, self.shape[1] - 1))
         while self.__world.terminal[choice]:
@@ -16,8 +19,6 @@ class QWorld(object):
         return choice
 
     def act(self, state, action):
-        import itertools
-        import random
         cum_prob = 0.0
         roll = random.random()
 

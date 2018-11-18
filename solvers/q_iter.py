@@ -1,7 +1,12 @@
+import numpy as np
+import itertools
+
+from prettytable import PrettyTable, ALL
+from numpy.linalg import norm
+
+
 class QIter(object):
     def __init__(self, world, beta=0.9):
-        import numpy as np
-
         self.beta = beta
         self.prev_total = {}
         self.world = world
@@ -25,9 +30,6 @@ class QIter(object):
         self.find_policy()
 
     def find_policy(self):
-        import numpy as np
-        import itertools
-
         rows = self.world.shape[0]
         cols = self.world.shape[1]
         for (r, c) in itertools.product(range(rows), range(cols)):
@@ -49,9 +51,6 @@ class QIter(object):
                 self.typ_max_q[k][r, c] = self.values[policy][k][r, c]
 
     def update(self):
-        import itertools
-        import numpy as np
-
         self.iters += 1
         rows = self.world.shape[0]
         cols = self.world.shape[1]
@@ -90,9 +89,6 @@ class QIter(object):
         return self.values
 
     def solve(self, max_iters=None, threshold=1e-8):
-        from numpy.linalg import norm
-        import numpy as np
-
         # We want to use a local iters variable
         # or you get counterintuitive behavior
         iters = 0
@@ -102,15 +98,14 @@ class QIter(object):
             if max_iters != None and iters > max_iters:
                 return True
             iters += 1
-            eval_mat = np.zeros(slf.world.shape)
+            eval_max = -np.inf
             for action in slf.world.actions:
-                eval_mat = np.maximum(
-                    np.abs(slf.prev_total[action] - slf.total[action]), eval_mat)
-            return norm(eval_mat, ord=np.inf) < threshold
+                eval_max = max(
+                    np.max(np.abs(slf.prev_total[action] - slf.total[action])), eval_max)
+            return eval_max < threshold
         return self.update_until(tolerance)
 
     def format_solution(self):
-        from prettytable import PrettyTable, ALL
         fmt_str = "Solved problem in %d iterations w/ beta=%f" % (
             self.iters, self.beta)
 

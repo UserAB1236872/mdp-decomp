@@ -1,7 +1,9 @@
+import numpy as np
+import itertools
+
+
 class Gridworld(object):
     def __init__(self, rewards, terminals, misfires, impassable, world_shape, misfire_prob=0.1):
-        import numpy as np
-
         self.terminals = terminals
         assert(terminals.shape == world_shape)
         self.misfires = misfires
@@ -20,7 +22,6 @@ class Gridworld(object):
         self.misfire_prob = misfire_prob
 
     def states(self):
-        import itertools
         return itertools.product(range(self.shape[0]), range(self.shape[1]))
 
     def successors(self, state):
@@ -71,8 +72,6 @@ class Gridworld(object):
         return 0.0
 
     def transition_matrix(self, state, action):
-        import numpy as np
-
         return np.fromfunction(
             lambda x, y: self.transition_prob(state, action, (x, y)), self.shape)
 
@@ -88,8 +87,6 @@ class Gridworld(object):
             return str(val[coord])
 
     def printable(self):
-        import numpy as np
-
         out = {}
 
         for typ, val in self.rewards.values:

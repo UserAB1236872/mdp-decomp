@@ -1,7 +1,12 @@
+import numpy as np
+import itertools
+
+from prettytable import PrettyTable, ALL
+from numpy.linalg import norm
+
+
 class ValueIter(object):
     def __init__(self, world, beta=0.9):
-        import numpy as np
-
         self.beta = beta
         self.prev_total = np.full(world.shape, np.inf)
         self.world = world
@@ -15,9 +20,6 @@ class ValueIter(object):
         self.find_policy()
 
     def find_policy(self):
-        import numpy as np
-        import itertools
-
         rows = self.world.shape[0]
         cols = self.world.shape[1]
         for (r, c) in itertools.product(range(rows), range(cols)):
@@ -42,9 +44,6 @@ class ValueIter(object):
             self.policy[r, c] = policy
 
     def update(self):
-        import itertools
-        import numpy as np
-
         self.iters += 1
         rows = self.world.shape[0]
         cols = self.world.shape[1]
@@ -82,9 +81,6 @@ class ValueIter(object):
         return self.values
 
     def solve(self, max_iters=None, threshold=1e-8):
-        from numpy.linalg import norm
-        import numpy as np
-
         # We want to use a local iters variable
         # or you get counterintuitive behavior
         iters = 0
@@ -98,7 +94,6 @@ class ValueIter(object):
         return self.update_until(tolerance)
 
     def format_solution(self):
-        from prettytable import PrettyTable, ALL
         fmt_str = "Solved problem in %d iterations w/ beta=%f" % (
             self.iters, self.beta)
 

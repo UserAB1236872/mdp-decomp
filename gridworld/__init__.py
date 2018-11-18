@@ -1,3 +1,7 @@
+import numpy as np
+import itertools
+
+
 class Gridworld(object):
     def __init__(self):
         import numpy as np
@@ -133,9 +137,6 @@ class Gridworld(object):
         return 0.0
 
     def transition_matrix(self, state, action):
-        import itertools
-        import numpy as np
-
         rows = self.shape[0]
         cols = self.shape[1]
 
