@@ -3,7 +3,7 @@ import itertools
 
 
 class Gridworld(object):
-    def __init__(self, rewards, terminals, misfires, impassable, world_shape, misfire_prob=0.1):
+    def __init__(self, rewards, terminals, misfires, impassable, world_shape, name, misfire_prob=0.1):
         self.__terminals = terminals
         assert(terminals.shape == world_shape)
         self.__misfires = misfires
@@ -20,6 +20,7 @@ class Gridworld(object):
 
         self.__actions = ['u', 'd', 'l', 'r']
         self.__misfire_prob = misfire_prob
+        self.name = name
 
     @property
     def terminals(self):

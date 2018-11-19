@@ -20,7 +20,7 @@ class CliffWorld(Gridworld):
 
         fail = np.array([
             [0, 0, 0, 0, 0],
-            [0, 0, 0, 0, -1],
+            [0, 0, 0, 0, -20],
             [0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0]
         ])
@@ -56,4 +56,4 @@ class CliffWorld(Gridworld):
         impassable = np.full(terminals.shape, False)
 
         super().__init__(rewards, terminals, misfires,
-                         impassable, terminals.shape, misfire_prob=misfire_prob)
+                         impassable, terminals.shape, "Cliffworld", misfire_prob=misfire_prob)

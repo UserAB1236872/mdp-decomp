@@ -42,7 +42,7 @@ class MiniGridworld(Gridworld):
         ])
 
         super().__init__(rewards, terminals, misfires,
-                         impassable, terminals.shape, misfire_prob=misfire_prob)
+                         impassable, terminals.shape, "MiniWorld", misfire_prob=misfire_prob)
 
 
 def test_gridworld():

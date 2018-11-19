@@ -57,6 +57,8 @@ class QIter(object):
             for (typ, _) in self.values[action].items():
                 typ_vals = np.zeros(self.world.shape)
                 for state in self.world.states:
+                    if self.world.terminals[state]:
+                        continue
                     for succ in self.world.successors(state, action):
                         typ_vals[state] += self.world.transition_prob(
                             state, action, succ) * self.typ_max_q[typ][succ]
