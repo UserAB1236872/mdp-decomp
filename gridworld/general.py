@@ -55,7 +55,10 @@ class Gridworld(object):
 
     @property
     def states(self):
-        return itertools.product(range(self.shape[0]), range(self.shape[1]))
+        return filter(lambda x: not self.impassable[x], itertools.product(range(self.shape[0]), range(self.shape[1])))
+
+    def nonterminal_states(self):
+        return filter(lambda x: not self.terminals[x], self.states)
 
     def successors(self, state):
         return set([*self.succ_map(state).values()])
@@ -106,7 +109,7 @@ class Gridworld(object):
 
     def transition_matrix(self, state, action):
         return np.fromfunction(
-            lambda x, y: self.transition_prob(state, action, (x, y)), self.shape)
+            np.vectorize(lambda x, y: self.transition_prob(state, action, (int(x), int(y)))), self.shape)
 
     def __printable_elem(self, val, x, y):
         coord = (x, y)
@@ -122,11 +125,11 @@ class Gridworld(object):
     def printable(self):
         out = {}
 
-        for typ, val in self.rewards.values:
+        for typ, val in self.rewards.items():
             out[typ] = np.fromfunction(
-                lambda x, y: self.__printable_elem(val, x, y), self.shape)
+                np.vectorize(lambda x, y: self.__printable_elem(val, int(x), int(y))), self.shape)
 
         out["total"] = np.fromfunction(
-            lambda x, y: self.__printable_elem(self.total_reward, x, y), self.shape)
+            np.vectorize(lambda x, y: self.__printable_elem(self.total_reward, int(x), int(y))), self.shape)
 
         return out
