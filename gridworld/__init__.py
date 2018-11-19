@@ -3,145 +3,153 @@ import itertools
 
 
 class Gridworld(object):
-    def __init__(self):
-        import numpy as np
-        cliff = np.array([
-            [0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0],
-            [0, -10, -10, -10, 0],
-            [0, 0, 0, 0, 0]
-        ])
+    def __init__(self, rewards, terminals, misfires, impassable, world_shape, misfire_prob=0.1):
+        self.__terminals = terminals
+        assert(terminals.shape == world_shape)
+        self.__misfires = misfires
+        assert(misfires.shape == world_shape)
+        self.__impassable = impassable
+        assert(impassable.shape == world_shape)
+        self.__rewards = rewards
 
-        success = np.array([
-            [0, 0, 0, 0, 1],
-            [0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 15],
-            [0, 0, 0, 0, 0]
-        ])
+        self.__shape = world_shape
+        self.__total_reward = np.zeros(world_shape)
+        for _, vals in self.rewards.items():
+            self.__total_reward += vals
+            assert(world_shape == vals.shape)
 
-        fail = np.array([
-            [0, 0, 0, 0, 0],
-            [0, 0, 0, 0, -1],
-            [0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0]
-        ])
+        self.__actions = ['u', 'd', 'l', 'r']
+        self.__misfire_prob = misfire_prob
 
-        gold = np.array([
-            [0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0],
-            [0, 0, 15, 0, 0],
-            [0, 0, 0, 0, 0]
-        ])
+    @property
+    def terminals(self):
+        return self.__terminals
 
-        self.rewards = {
-            "cliff": cliff,
-            "success": success,
-            "fail": fail,
-            "gold": gold,
-        }
+    @property
+    def misfires(self):
+        return self.__misfires
 
-        self.total_reward = np.zeros((4, 5))
-        for (_, v) in self.rewards.items():
-            self.total_reward += v
+    @property
+    def impassable(self):
+        return self.__impassable
 
-        self.terminal = np.array([
-            [False, False, False, False, True],
-            [False, False, False, False, True],
-            [False, True,  True,  True,  True],
-            [False, False, False, False, False]
-        ])
+    @property
+    def rewards(self):
+        return self.__rewards
 
-        self.shape = (4, 5)
+    @property
+    def shape(self):
+        return self.__shape
 
-        self.actions = ['u', 'd', 'l', 'r']
+    @property
+    def total_reward(self):
+        return self.__total_reward
 
-        self.states = []
+    @property
+    def actions(self):
+        return self.__actions
 
-        for r in range(0, 4):
-            for c in range(0, 6):
-                self.states.append((r, c))
+    @property
+    def misfire_prob(self):
+        return self.__misfire_prob
+
+    @property
+    def states(self):
+        return filter(lambda x: not self.impassable[x], itertools.product(range(self.shape[0]), range(self.shape[1])))
+
+    def nonterminal_states(self):
+        return filter(lambda x: not self.terminals[x], self.states)
+
+    def successors(self, state, action):
+        return self.succ_map(state)[action]
+
+    def succ_map(self, state):
+        succs = {key: [val]
+                 for key, val in self.__direct_succ_map(state).items()}
+
+        if self.misfires[state] == None or len(self.misfires[state]) == 0:
+            return succs
+
+        for misfire in self.misfires[state]:
+            for succ in succs.keys():
+                if succ == misfire:
+                    continue
+
+                if succs[misfire] not in succs[succ]:
+                    succs[succ].append(succs[misfire][0])
+
+        return succs
+
+    def all_successors(self, state):
+        return set(self.__direct_succ_map(state).values())
+
+    def __direct_succ_map(self, state):
+        succs = {}
+        if state[0] - 1 >= 0 and not self.impassable[state[0] - 1, state[1]]:
+            succs['u'] = (state[0] - 1, state[1])
+        else:
+            succs['u'] = state
+
+        if state[0] + 1 < self.shape[0] and not self.impassable[state[0] + 1, state[1]]:
+            succs['d'] = (state[0] + 1, state[1])
+        else:
+            succs['d'] = state
+
+        if state[1] - 1 >= 0 and not self.impassable[state[0], state[1] - 1]:
+            succs['l'] = (state[0], state[1] - 1)
+        else:
+            succs['l'] = state
+
+        if state[1] + 1 < self.shape[1] and not self.impassable[state[0], state[1] + 1]:
+            succs['r'] = (state[0], state[1] + 1)
+        else:
+            succs['r'] = state
+
+        return succs
 
     def transition_prob(self, state, action, nxt):
-        if state[0] < 0 or state[0] > 3 or state[1] < 0 or state[1] > 4:
-            # Out of bounds but this makes code prettier
+        succs = self.__direct_succ_map(state)
+        assert(action in self.actions)
+        if nxt not in succs.values() or self.impassable[nxt]:
             return 0.0
 
-        if nxt[0] < 0 or nxt[0] > 3 or nxt[1] < 0 or nxt[1] > 4:
-            # Out of bounds but this makes code prettier
-            return 0.0
+        misfires = self.misfires[state]
+        if misfires == None:
+            misfires = ''
+        misfires = misfires.replace(action, '')
 
-        if self.terminal[state]:
-            return 0.0
+        if nxt == succs[action]:
+            return 1.0 - len(misfires) * self.misfire_prob
 
-        # Boundary guard
-        if action == 'l' and state[1] == 0:
-            if state == nxt:
-                return 1.0
-            else:
-                return 0.0
-
-        if action == 'r' and state[1] == 4:
-            if state == nxt:
-                return 1.0
-            else:
-                return 0.0
-
-        if action == 'u' and state[0] == 0:
-            if state == nxt:
-                return 1.0
-            else:
-                return 0.0
-
-        if action == 'd' and state[0] == 3:
-            if state == nxt:
-                return 1.0
-            else:
-                return 0.0
-
-        # cliff slipping
-        if state[0] == 3 and (state[1] >= 1 and state[1] <= 3) and (action == 'r' or action == 'l'):
-            if action == 'r' and nxt[0] == state[0] and nxt[1] == state[1] + 1:
-                return 0.9
-            elif action == 'l' and nxt[0] == state[0] and nxt[1] == state[1] - 1:
-                return 0.9
-            elif (action == 'r' or action == 'l') and nxt[0] == state[0] - 1 and nxt[1] == state[1]:
-                return 0.1
-            else:
-                return 0.0
-
-        # Normal dynamics
-        if action == 'u':
-            if nxt[0] == state[0] - 1 and nxt[1] == state[1]:
-                return 1.0
-            else:
-                return 0.0
-
-        if action == 'd':
-            if nxt[0] == state[0] + 1 and nxt[1] == state[1]:
-                return 1.0
-            else:
-                return 0.0
-
-        if action == 'l':
-            if nxt[0] == state[0] and nxt[1] == state[1] - 1:
-                return 1.0
-            else:
-                return 0.0
-
-        if action == 'r':
-            if nxt[0] == state[0] and nxt[1] == state[1] + 1:
-                return 1.0
-            else:
-                return 0.0
+        for a, succ in succs.items():
+            if succ == nxt and a in misfires:
+                return self.misfire_prob
 
         return 0.0
 
     def transition_matrix(self, state, action):
-        rows = self.shape[0]
-        cols = self.shape[1]
+        return np.fromfunction(
+            np.vectorize(lambda x, y: self.transition_prob(state, action, (int(x), int(y)))), self.shape)
 
-        mat = np.zeros((rows, cols))
-        for (r, c) in itertools.product(range(rows), range(cols)):
-            mat[r, c] = self.transition_prob(state, action, (r, c))
+    def __printable_elem(self, val, x, y):
+        coord = (x, y)
+        if self.impassable[coord]:
+            return 'x'
+        elif self.misfires[coord] != None and len(self.misfires[coord]) > 0:
+            return self.misfires[coord]
+        elif val[coord] == 0:
+            return ' '
+        else:
+            return str(val[coord])
 
-        return mat
+    def printable(self):
+        out = {}
+
+        for typ, val in self.rewards.items():
+            out[typ] = np.fromfunction(
+                np.vectorize(lambda x, y: self.__printable_elem(val, int(x), int(y))), self.shape)
+
+        out["total"] = np.fromfunction(
+            np.vectorize(lambda x, y: self.__printable_elem(self.total_reward, int(x), int(y))), self.shape)
+
+        return out

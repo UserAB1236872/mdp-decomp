@@ -1,4 +1,4 @@
-from gridworld.general import Gridworld
+from gridworld import Gridworld
 import numpy as np
 
 import itertools
@@ -69,35 +69,66 @@ def test_states():
     assert(nonterminals == set(gridworld.nonterminal_states()))
 
 
-def test_successors():
+def test_succ_map():
     gridworld = MiniGridworld()
 
     source = (1, 0)
     succs = gridworld.succ_map(source)
 
     # Testing impassable terrain
-    assert(succs['u'] == source)
-    assert(succs['d'] == (2, 0))
-    assert(succs['l'] == source)
-    assert(succs['r'] == (1, 1))
-
-    succ_set = gridworld.successors(source)
-    assert(len(succ_set) == 3)
-    for succ in succs.values():
-        assert(succ in succ_set)
+    assert(succs['u'][0] == source)
+    assert(succs['d'][0] == (2, 0))
+    assert(succs['l'][0] == source)
+    assert(succs['r'][0] == (1, 1))
 
     # This is a terminal state, but good for testing
     source = (2, 1)
     succs = gridworld.succ_map(source)
-    assert(succs['u'] == (1, 1))
-    assert(succs['r'] == source)
-    assert(succs['l'] == (2, 0))
-    assert(succs['d'] == (3, 1))
+    assert(succs['u'][0] == (1, 1))
+    assert(succs['r'][0] == source)
+    assert(succs['l'][0] == (2, 0))
+    assert(succs['d'][0] == (3, 1))
 
-    succ_set = gridworld.successors(source)
-    assert(len(succ_set) == 4)
-    for succ in succs.values():
-        assert(succ in succ_set)
+
+def test_successors():
+    gridworld = MiniGridworld()
+
+    source = (1, 0)
+    succ_u = gridworld.successors(source, 'u')
+    succ_d = gridworld.successors(source, 'd')
+    succ_l = gridworld.successors(source, 'l')
+    succ_r = gridworld.successors(source, 'r')
+
+    # Testing impassable terrain
+    assert(succ_u[0] == source)
+    assert(succ_d[0] == (2, 0))
+    assert(succ_l[0] == source)
+    assert(succ_r[0] == (1, 1))
+
+
+def test_succ_misfire():
+    gridworld = MiniGridworld()
+
+    source = (3, 0)
+    succs = gridworld.succ_map(source)
+
+    assert(succs['r'][0] == (3, 1))
+    assert(len(succs['r']) == 1)
+
+    misfire = succs['r'][0]
+    for a, succ in succs.items():
+        if a == 'r':
+            continue
+        assert(misfire in succ)
+        assert(len(succ) == 2)
+
+
+def test_all_successors():
+    gridworld = MiniGridworld()
+
+    source = (1, 0)
+    succs = set([(1, 1), source, (2, 0)])
+    assert(gridworld.all_successors(source) == succs)
 
 
 def test_transition_prob():

@@ -66,19 +66,19 @@ class Sarsa(object):
         import itertools
         import numpy as np
 
-        for (r, c) in itertools.product(range(self.world.shape[0]), range(self.world.shape[1])):
+        for state in itertools.product(range(self.world.shape[0]), range(self.world.shape[1])):
             best_action = None
             max_q = -np.inf
 
             for action in self.world.actions:
-                val = self.total[action][r, c]
+                val = self.total[action][state]
                 if val > max_q:
                     best_action = action
                     max_q = val
 
             assert(best_action != None)
-            self.policy[r, c] = best_action
-            self.max_qs[r, c] = max_q
+            self.policy[state] = best_action
+            self.max_qs[state] = max_q
 
     def act(self):
         self.__check_ep()

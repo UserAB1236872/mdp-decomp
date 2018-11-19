@@ -30,42 +30,38 @@ class QIter(object):
         self.find_policy()
 
     def find_policy(self):
-        rows = self.world.shape[0]
-        cols = self.world.shape[1]
-        for (r, c) in itertools.product(range(rows), range(cols)):
-            if self.world.terminal[r, c]:
-                self.policy[r, c] = None
+        for state in self.world.states:
+            if self.world.terminals[state]:
+                self.policy[state] = None
                 continue
 
             policy = None
             max_action_val = -np.inf
 
             for action in self.world.actions:
-                if self.total[action][r, c] > max_action_val:
-                    max_action_val = self.total[action][r, c]
+                if self.total[action][state] > max_action_val:
+                    max_action_val = self.total[action][state]
                     policy = action
 
-            self.policy[r, c] = policy
-            self.max_q[r, c] = max_action_val
+            self.policy[state] = policy
+            self.max_q[state] = max_action_val
             for k in self.world.rewards.keys():
-                self.typ_max_q[k][r, c] = self.values[policy][k][r, c]
+                self.typ_max_q[k][state] = self.values[policy][k][state]
 
     def update(self):
         self.iters += 1
-        rows = self.world.shape[0]
-        cols = self.world.shape[1]
 
         for action in self.world.actions:
             new_vals = {}
             for (typ, _) in self.values[action].items():
                 typ_vals = np.zeros(self.world.shape)
-                for (r, c) in itertools.product(range(rows), range(cols)):
-                    for (r_sp, c_sp) in itertools.product(range(rows), range(cols)):
-                        typ_vals[r, c] += self.world.transition_prob(
-                            (r, c), action, (r_sp, c_sp)) * self.typ_max_q[typ][r_sp, c_sp]
+                for state in self.world.states:
+                    for succ in self.world.successors(state, action):
+                        typ_vals[state] += self.world.transition_prob(
+                            state, action, succ) * self.typ_max_q[typ][succ]
 
-                    typ_vals[r, c] *= self.beta
-                    typ_vals[r, c] += self.world.rewards[typ][r, c]
+                    typ_vals[state] *= self.beta
+                    typ_vals[state] += self.world.rewards[typ][state]
 
                 new_vals[typ] = typ_vals
 

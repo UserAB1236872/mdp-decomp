@@ -20,11 +20,9 @@ class ValueIter(object):
         self.find_policy()
 
     def find_policy(self):
-        rows = self.world.shape[0]
-        cols = self.world.shape[1]
-        for (r, c) in itertools.product(range(rows), range(cols)):
-            if self.world.terminal[r, c]:
-                self.policy[r, c] = None
+        for state in self.world.states:
+            if self.world.terminals[state]:
+                self.policy[state] = None
                 continue
 
             policy = None
@@ -32,16 +30,16 @@ class ValueIter(object):
 
             for action in self.world.actions:
                 total = 0.0
-                for (r_sp, c_sp) in itertools.product(range(rows), range(cols)):
-                    total += self.total[r_sp, c_sp] * \
+                for nxt in self.world.successors(state, action):
+                    total += self.total[nxt] * \
                         self.world.transition_prob(
-                            (r, c), action, (r_sp, c_sp))
+                            state, action, nxt)
 
                 if total > max_action_val:
                     max_action_val = total
                     policy = action
 
-            self.policy[r, c] = policy
+            self.policy[state] = policy
 
     def update(self):
         self.iters += 1
@@ -51,13 +49,13 @@ class ValueIter(object):
         new_vals = {}
         for (typ, vals) in self.values.items():
             typ_vals = np.zeros(self.world.shape)
-            for (r, c) in itertools.product(range(rows), range(cols)):
-                for (r_sp, c_sp) in itertools.product(range(rows), range(cols)):
-                    typ_vals[r, c] += self.world.transition_prob(
-                        (r, c), self.policy[r, c], (r_sp, c_sp)) * vals[r_sp, c_sp]
+            for state in self.world.states:
+                for nxt in self.world.successors(self.policy[state]):
+                    typ_vals[state] += self.world.transition_prob(
+                        state, self.policy[state], nxt) * vals[nxt]
 
-                typ_vals[r, c] *= self.beta
-                typ_vals[r, c] += self.world.rewards[typ][r, c]
+                typ_vals[state] *= self.beta
+                typ_vals[state] += self.world.rewards[typ][state]
 
             new_vals[typ] = typ_vals
 

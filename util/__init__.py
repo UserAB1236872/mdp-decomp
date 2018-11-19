@@ -37,8 +37,8 @@ class LinearDecay(Decay):
         return self.__start
 
     def __call__(self) -> float:
-        self.curr_steps += 1
+        self.__curr_steps += 1
         interp = min(self.curr_steps, self.steps) / self.steps
-        self.curr_epsilon = (1 - interp) * self.start + interp * self.end
+        self.__curr_epsilon = (1 - interp) * self.start + interp * self.end
 
         return self.curr_epsilon
