@@ -24,12 +24,12 @@ class SolutionMonitor(object):
         self.min_deviations = {}
         self.max_deviations = {}
         self.avg_deviations = {}
-        self.max_norm = {}
+        self.total_max_deviations = {}
         for name in self.solvers.keys():
             self.min_deviations[name] = []
             self.max_deviations[name] = []
             self.avg_deviations[name] = []
-            self.max_norm[name] = []
+            self.total_max_deviations[name] = []
 
         self.graph = None
 
@@ -43,7 +43,7 @@ class SolutionMonitor(object):
         eval_avg = 0.0
         eval_avg_denom = 0.0
 
-        max_norm = -np.inf
+        total_max_deviations = -np.inf
 
         for action in self.world.actions:
             for r_type in self.world.rewards.keys():
@@ -59,13 +59,13 @@ class SolutionMonitor(object):
                 eval_avg = eval_avg + np.sum(abs_distance)
                 eval_avg_denom += self.world.shape[0] * self.world.shape[1]
 
-            max_norm = max(max_norm, np.max(
+            total_max_deviations = max(total_max_deviations, np.max(
                 np.abs(solver.total[action] - self.exact.total[action])))
 
         self.max_deviations[solver_name].append(eval_max)
         self.min_deviations[solver_name].append(eval_min)
         self.avg_deviations[solver_name].append(eval_avg / eval_avg_denom)
-        self.max_norm[solver_name].append(max_norm)
+        self.total_max_deviations[solver_name].append(total_max_deviations)
 
     def run_step(self):
         if self.curr_index == len(self.samples):
@@ -129,9 +129,9 @@ class SolutionMonitor(object):
             p2b = plot.line(
                 self.samples, self.avg_deviations[name], line_dash="4 4", line_color=color, name="%s Avg Deviation" % name)
             p3 = plot.circle(
-                self.samples, self.max_norm[name], fill_color=color, line_color=color, name="%s Max Norm (total Q-values)" % name)
+                self.samples, self.total_max_deviations[name], fill_color=color, line_color=color, name="%s Total Max Deviation (total Q-values)" % name)
             p4 = plot.line(
-                self.samples, self.max_norm[name], line_color=color, line_dash="2 2", name="%s Max Norm (total Q-values)" % name)
+                self.samples, self.total_max_deviations[name], line_color=color, line_dash="2 2", name="%s Total Max Deviation (total Q-values)" % name)
 
             plots.append(LegendItem(label="Max Deviation for % s" %
                                     name, renderers=[p0]))
