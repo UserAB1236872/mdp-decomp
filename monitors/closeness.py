@@ -21,12 +21,10 @@ class SolutionMonitor(object):
 
         self.curr_index = 0
 
-        self.min_deviations = {}
         self.max_deviations = {}
         self.avg_deviations = {}
         self.total_max_deviations = {}
         for name in self.solvers.keys():
-            self.min_deviations[name] = []
             self.max_deviations[name] = []
             self.avg_deviations[name] = []
             self.total_max_deviations[name] = []
@@ -39,7 +37,6 @@ class SolutionMonitor(object):
 
     def compute_deviations(self, solver, solver_name):
         eval_max = -np.inf
-        eval_min = np.inf
         eval_avg = 0.0
         eval_avg_denom = 0.0
 
@@ -50,12 +47,6 @@ class SolutionMonitor(object):
                 abs_distance = np.abs(self.exact.values[action][r_type] -
                                       solver.q_vals[action][r_type])
                 eval_max = max(eval_max, np.max(abs_distance))
-                try:
-                    eval_min = min(eval_min, np.min(
-                        abs_distance[abs_distance > 1e-2]))
-                except ValueError:  # Only difference is 0
-                    pass
-                assert(eval_min != 0)
                 eval_avg = eval_avg + np.sum(abs_distance)
                 eval_avg_denom += self.world.shape[0] * self.world.shape[1]
 
@@ -63,7 +54,6 @@ class SolutionMonitor(object):
                 np.abs(solver.total[action] - self.exact.total[action])))
 
         self.max_deviations[solver_name].append(eval_max)
-        self.min_deviations[solver_name].append(eval_min)
         self.avg_deviations[solver_name].append(eval_avg / eval_avg_denom)
         self.total_max_deviations[solver_name].append(total_max_deviations)
 
@@ -122,8 +112,6 @@ class SolutionMonitor(object):
             color = self.colors[name]
             p0 = plot.line(
                 self.samples, self.max_deviations[name], line_color=color, name="%s Max Deviation" % name)
-            p1 = plot.line(
-                self.samples, self.min_deviations[name], line_color=color, line_dash="4 4", name="%s Min Deviation" % name)
             p2 = plot.circle(
                 self.samples, self.avg_deviations[name], fill_color="white", line_color=color, name="%s Avg Deviation" % name)
             p2b = plot.line(
@@ -135,8 +123,6 @@ class SolutionMonitor(object):
 
             plots.append(LegendItem(label="Max Deviation for % s" %
                                     name, renderers=[p0]))
-            plots.append(LegendItem(
-                label="(Nonzero) Min Deviation for %s" % name, renderers=[p1]))
             plots.append(LegendItem(label="Avg Deviation for %s" %
                                     name, renderers=[p2, p2b]))
             plots.append(LegendItem(label="Max Norm for %s" %
