@@ -28,6 +28,7 @@ class QIter(object):
         self.policy = np.full(world.shape, None)
         self.iters = 0
         self.find_policy()
+        self.__solved = False
 
     def find_policy(self):
         for state in self.world.states:
@@ -99,7 +100,10 @@ class QIter(object):
                 eval_max = max(
                     np.max(np.abs(slf.prev_total[action] - slf.total[action])), eval_max)
             return eval_max < threshold
-        return self.update_until(tolerance)
+        out = self.update_until(tolerance)
+
+        self.__solved = True
+        return out
 
     def format_solution(self):
         fmt_str = "Solved problem in %d iterations w/ beta=%f" % (
@@ -116,3 +120,15 @@ class QIter(object):
             fmt_str, table, self.max_q, self.policy)
 
         return fmt_str
+
+    @property
+    def solved(self):
+        if self.__solved:
+            return True
+
+        eval_max = -np.inf
+        for action in self.world.actions:
+            eval_max = max(
+                np.max(np.abs(self.prev_total[action] - self.total[action])), eval_max)
+        self.__solved = eval_max < 1e-8
+        return self.__solved
