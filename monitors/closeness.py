@@ -1,4 +1,5 @@
 from bokeh import plotting
+from bokeh.colors import RGB
 from bokeh.palettes import Category10
 from bokeh.models import Legend, LegendItem, HoverTool
 from gridworld.q_world import QWorld
@@ -24,10 +25,16 @@ class SolutionMonitor(object):
         self.max_deviations = {}
         self.avg_deviations = {}
         self.total_max_deviations = {}
+        self.avg_max_deviation = {}
+        self.typed_max_dev = {}
         for name in self.solvers.keys():
             self.max_deviations[name] = []
             self.avg_deviations[name] = []
             self.total_max_deviations[name] = []
+            self.avg_max_deviation[name] = []
+            self.typed_max_dev[name] = {}
+            for r_type in self.world.rewards.keys():
+                self.typed_max_dev[name][r_type] = []
 
         self.graph = None
 
@@ -39,6 +46,8 @@ class SolutionMonitor(object):
         eval_max = -np.inf
         eval_avg = 0.0
         eval_avg_denom = 0.0
+        eval_avg_max_norm = 0.0
+        typed_maxes = {}
 
         total_max_deviations = -np.inf
 
@@ -49,13 +58,24 @@ class SolutionMonitor(object):
                 eval_max = max(eval_max, np.max(abs_distance))
                 eval_avg = eval_avg + np.sum(abs_distance)
                 eval_avg_denom += self.world.shape[0] * self.world.shape[1]
+                eval_avg_max_norm += eval_max
+
+                typed_maxes[r_type] = -np.inf if \
+                    r_type not in typed_maxes else typed_maxes[r_type]
+                typed_maxes[r_type] = max(
+                    typed_maxes[r_type], np.max(abs_distance))
 
             total_max_deviations = max(total_max_deviations, np.max(
                 np.abs(solver.total[action] - self.exact.total[action])))
 
+        for r_type, val in typed_maxes.items():
+            self.typed_max_dev[solver_name][r_type].append(val)
+
         self.max_deviations[solver_name].append(eval_max)
         self.avg_deviations[solver_name].append(eval_avg / eval_avg_denom)
         self.total_max_deviations[solver_name].append(total_max_deviations)
+        self.avg_max_deviation[solver_name].append(
+            eval_avg_max_norm / (len(self.world.actions) * len(self.world.rewards)))
 
     def run_step(self):
         if self.curr_index == len(self.samples):
@@ -112,6 +132,8 @@ class SolutionMonitor(object):
             color = self.colors[name]
             p0 = plot.line(
                 self.samples, self.max_deviations[name], line_color=color, name="%s Max Deviation" % name)
+            p1 = plot.line(
+                self.samples, self.avg_max_deviation[name], line_color=color, line_dash="4 4", name="%s Avg Max Devation" % name)
             p2 = plot.circle(
                 self.samples, self.avg_deviations[name], fill_color="white", line_color=color, name="%s Avg Deviation" % name)
             p2b = plot.line(
@@ -125,8 +147,19 @@ class SolutionMonitor(object):
                                     name, renderers=[p0]))
             plots.append(LegendItem(label="Avg Deviation for %s" %
                                     name, renderers=[p2, p2b]))
-            plots.append(LegendItem(label="Max Norm for %s" %
+            plots.append(LegendItem(label="Total Max Deviation for %s" %
                                     name, renderers=[p3, p4]))
+            plots.append(LegendItem(label="Avg Max Deviation for %s (Avg of Max Devs across Reward Types)" %
+                                    name, renderers=[p1]))
+
+            color = RGB(int(color[1:3], base=16), int(
+                color[3:5], base=16), int(color[5:], base=16))
+            color = color.lighten(0.2)
+            for (i, (r_type, max_dev)) in enumerate(self.typed_max_dev[name].items()):
+                pr = plot.line(self.samples, max_dev, line_color=color, line_dash="%d %d" % (
+                    i, i), name="%s Deviation for %s" % (r_type, name))
+                plots.append(LegendItem(label="%s Deviation for %s" %
+                                        (r_type, name), renderers=[pr]))
 
         legend = Legend(items=plots)
         legend.click_policy = "hide"
