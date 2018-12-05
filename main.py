@@ -16,7 +16,7 @@ def main():
     exact = QIter
 
     monitor = SolutionMonitor(world, exact, explorers, max_steps=20000)
-    monitor.compute(append=False)
+    monitor.multi_run()
 
 
 if __name__ == "__main__":
