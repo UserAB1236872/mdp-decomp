@@ -58,6 +58,24 @@ class Gridworld(object):
     def states(self):
         return filter(lambda x: not self.impassable[x], itertools.product(range(self.shape[0]), range(self.shape[1])))
 
+    def statify(self, state):
+        """
+        Transforms a given state into a matrix-view of the gridworld suitable for, i.e.,
+        a neural net. This will be represented as a 0.0 in every tile, except for
+        where the state is passed in which is a 1.0.
+
+        Will raise an exception if given an impassable state.
+        """
+        assert(0 <= state[0] < self.shape[0])
+        assert(0 <= state[1] < self.shape[1])
+        assert(len(state) == 2)
+        if self.impassable[state]:
+            raise Exception("Tile is impassable")
+
+        out = np.zeros(self.shape, dtype=float)
+        out[state] = 1.0
+        return out
+
     def nonterminal_states(self):
         return filter(lambda x: not self.terminals[x], self.states)
 

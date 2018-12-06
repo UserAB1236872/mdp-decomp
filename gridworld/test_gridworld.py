@@ -2,6 +2,7 @@ from gridworld import Gridworld
 import numpy as np
 
 import itertools
+import pytest
 
 
 class MiniGridworld(Gridworld):
@@ -210,3 +211,24 @@ def test_printable_state():
     verify[2, 1] = '1.0'
     verify[3, 1] = ' '
     assert((verify == printables['success']).all())
+
+
+def test_statify_impassable():
+    gridworld = MiniGridworld()
+
+    with pytest.raises(Exception):
+        gridworld.statify((0, 0))
+        gridworld.statify((0, 1))
+
+
+def test_statify():
+    gridworld = MiniGridworld()
+
+    expected = np.array([
+        [0.0, 0.0],
+        [0.0, 0.0],
+        [0.0, 0.0],
+        [1.0, 0.0],
+    ])
+
+    assert((expected == gridworld.statify((3, 0))).all())

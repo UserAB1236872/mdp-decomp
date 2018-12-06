@@ -42,3 +42,6 @@ class QWorld(object):
                 return nxt, rewards, total, terminal
 
         raise Exception("No successor state")
+
+    def statify(self, state):
+        return self.__world.statify(state)
