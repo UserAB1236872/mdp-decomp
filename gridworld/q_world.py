@@ -45,3 +45,10 @@ class QWorld(object):
 
     def statify(self, state):
         return self.__world.statify(state)
+
+    def valid(self, state):
+        return (0 <= state[0] <= self.shape[0]) and (0 <= state[1] <= self.shape[1]) and not (self.__world.impassable[state])
+
+    @property
+    def states(self):
+        return self.__world.states

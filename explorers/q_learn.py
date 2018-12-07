@@ -54,14 +54,29 @@ class QLearn(object):
             self.policy[r, c] = best_action
             self.max_qs[r, c] = max_q
 
+    def observe(self, action, rewards, next_state):
+        a = self.learn_rate
+        y = self.discount
+
+        for r_type, obs in rewards.items():
+            self.q_vals[action][r_type][self.state] = (
+                1 - a) * self.q_vals[action][r_type][self.state] + \
+                a * y * \
+                (obs + self.q_vals[self.policy[next_state]]
+                 [r_type][next_state])
+
+    def update_qs(self, action):
+        total = 0.0
+        for r_map in self.q_vals[action].values():
+            total += r_map[self.state]
+
+        self.total[action][self.state] = total
+
     def act(self):
         import random
 
         self.__check_ep()
         self.ep_steps += 1
-
-        a = self.learn_rate
-        y = self.discount
 
         roll = random.random()
         action = None
@@ -75,13 +90,9 @@ class QLearn(object):
 
         self.ep_rewards["total"] += total
 
-        total = 0.0
-        for (reward, obs) in rewards.items():
-            self.q_vals[action][reward][self.state] = (
-                1 - a) * self.q_vals[action][reward][self.state] + a * y * (obs + self.q_vals[self.policy[next_state]][reward][next_state])
-            total += self.q_vals[action][reward][self.state]
+        self.observe(action, rewards, next_state)
 
-        self.total[action][self.state] = total
+        self.update_qs(action)
 
         if terminal:
             self.state = None
