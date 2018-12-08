@@ -9,28 +9,28 @@ class CliffWorld(Gridworld):
             [0, 0, 0, 0, 0],
             [0, -10, -10, -10, 0],
             [0, 0, 0, 0, 0]
-        ])
+        ], dtype=float)
 
         success = np.array([
             [0, 0, 0, 0, 1],
             [0, 0, 0, 0, 0],
             [0, 0, 0, 0, 15],
             [0, 0, 0, 0, 0]
-        ])
+        ], dtype=float)
 
         fail = np.array([
             [0, 0, 0, 0, 0],
             [0, 0, 0, 0, -20],
             [0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0]
-        ])
+        ], dtype=float)
 
         gold = np.array([
             [0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0],
             [0, 0, 10, 0, 0],
             [0, 0, 0, 0, 0]
-        ])
+        ], dtype=float)
 
         rewards = {
             "cliff": cliff,

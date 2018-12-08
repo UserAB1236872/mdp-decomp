@@ -3,6 +3,8 @@ def main():
     from solvers.q_iter import QIter
     from explorers.q_learn import QLearn
     from explorers.sarsa import Sarsa
+    from explorers.dqn import DQN
+    from explorers.dqn.model import RewardMajorModel, DQNLinear
     from monitors.closeness import SolutionMonitor
     import numpy as np
     import logging
@@ -12,7 +14,10 @@ def main():
 
     world = CliffWorld()
 
-    explorers = [QLearn, Sarsa]
+    def make_dqn(w, verbose=True):
+        return DQN(w, RewardMajorModel, DQNLinear, verbose=verbose)
+
+    explorers = [QLearn, Sarsa, make_dqn]
     exact = QIter
 
     monitor = SolutionMonitor(world, exact, explorers, max_steps=20000)

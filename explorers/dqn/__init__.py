@@ -1,4 +1,5 @@
-from torch import Tensor
+from torch import FloatTensor
+from torch.autograd import Variable
 import numpy as np
 from util import LinearDecay
 import itertools
@@ -33,10 +34,13 @@ class Experience(object):
 
 
 class DQN(QLearn):
-    def __init__(self, q_world, model, mem_len=500000, swap_interval=100, batch_size=10, **kwargs):
+    def __init__(self, q_world, model, nn_archetype, mem_len=100, swap_interval=100, batch_size=32, **kwargs):
         super().__init__(q_world, **kwargs)
-        self.curr_model = model()
-        self.eval_model = model()
+        state_size = q_world.shape[0] * q_world.shape[1]
+        self.curr_model = model(state_size, self.world.reward_types,
+                                self.world.actions, nn_archetype, lr=self.learn_rate)
+        self.eval_model = model(state_size, self.world.reward_types,
+                                self.world.actions, nn_archetype, lr=self.learn_rate)
 
         self.memory = collections.deque(maxlen=mem_len)
         self.swap_interval = swap_interval
@@ -44,20 +48,20 @@ class DQN(QLearn):
 
     def observe(self, action, rewards, next_state):
         experience = Experience(self.world.statify(
-            self.state), action, rewards, self.world.statify(next_state))
+            self.state).flatten(), action, rewards, self.world.statify(next_state).flatten())
         self.memory.append(experience)
 
     def end_ep(self):
         batch = random.sample(self.memory, min(
             len(self.memory), self.batch_size))
 
-        curr_states = Tensor([*map(lambda x: x.s, batch)])
-        next_states = Tensor([*map(lambda x: x.s_p, batch)])
+        curr_states = Variable(FloatTensor([*map(lambda x: x.s, batch)]),requires_grad=True)
+        next_states = Variable(FloatTensor([*map(lambda x: x.s_p, batch)]))
         actions = [*map(lambda x: x.a, batch)]
         rewards = [*map(lambda x: x.r, batch)]
 
         self.curr_model.update(curr_states, next_states,
-                               actions, rewards, self.eval_model)
+                               actions, rewards, self.discount, self.eval_model)
 
         if self.eps % self.swap_interval:
             if self.verbose:

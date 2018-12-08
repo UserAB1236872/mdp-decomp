@@ -1,5 +1,5 @@
 class QLearn(object):
-    def __init__(self, q_world, epsilon_start=0.9, epsilon_end=0.1, epsilon_decay_steps=100, discount=0.9, learn_rate=0.1, verbose=True):
+    def __init__(self, q_world, epsilon_start=0.9, epsilon_end=0.1, epsilon_decay_steps=100, discount=0.9, learn_rate=0.001, verbose=True):
         import numpy as np
         from util import LinearDecay
 

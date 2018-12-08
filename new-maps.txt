@@ -1,0 +1,44 @@
+new scenarios
+
+Basic
+
+    success:
+    0 1
+    0 0
+
+    fail:
+
+    0  0
+    0 -1
+
+Cancelled out:
+
+    Type1:
+    0 0 0 1
+    0 0 0 0
+    0 0 0 0
+    0 0 0 5
+
+    Type 2:
+    0 0 0 -1
+    0 0 0  0
+    0 0 0  0
+    0 0 0 -5
+
+Bridge
+
+    Cliff:
+    0   0  0   0 0
+    x -25 EW -25 x
+    x -20 EW -20 x
+    x -15 EW -15 x
+    x  -1 EW  -1 x
+    0   0  0   0 0
+
+    Success:
+    0 0 20 0 0
+    x 0  W 0 x
+    x 0  W 0 x
+    x 0  W 0 x
+    x 0  W 0 x
+    0 0  0 0 0
