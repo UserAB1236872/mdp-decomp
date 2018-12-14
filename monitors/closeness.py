@@ -12,7 +12,7 @@ class SolutionMonitor(object):
     def __init__(self, world, exact_constructor, solver_constructors, sample_step=100, max_steps=500000):
         self.exact = exact_constructor(world)
         self.solvers = {type(solver).__name__: solver for solver in map(
-            lambda s: s(QWorld(world), verbose=False), solver_constructors)}
+            lambda s: s(QWorld(world), verbose=False, max_episodes=max_steps), solver_constructors)}
         self.world = world
         self.sample_step = sample_step
         self.max_steps = max_steps

@@ -1,11 +1,26 @@
+import os
+import matplotlib as mpl
+
+mpl.use('Agg')  # to plot graphs over a server.
+import matplotlib.pyplot as plt
+
+
 class QLearn(object):
-    def __init__(self, q_world, epsilon_start=0.9, epsilon_end=0.1, epsilon_decay_steps=100, discount=0.9, learn_rate=0.001, verbose=True):
+    def __init__(self, q_world, epsilon_start=0.9, epsilon_end=0.1, epsilon_decay_steps=4000, discount=0.9,
+                 learn_rate=0.01, verbose=True, max_episodes = 10000):
         import numpy as np
         from util import LinearDecay
 
         self.world = q_world
-        self.epsilon = LinearDecay(
-            epsilon_start, epsilon_end, epsilon_decay_steps)
+        # self.epsilon = LinearDecay(
+        #     epsilon_start, epsilon_end, epsilon_decay_steps)
+
+        self.epsilon = epsilon_start
+        self.max_eps = epsilon_start
+        self.min_eps = epsilon_end
+        self.max_episodes = max_episodes
+
+        self.threshold_eps = 0.8 * self.max_episodes
 
         self.q_vals = {}
         self.total = {}
@@ -32,6 +47,10 @@ class QLearn(object):
         self.ep_steps = 0
         self.verbose = verbose
 
+        self.epses = []
+
+        self.curr_episode = 0
+
     def __check_ep(self):
         if self.state == None:
             self.state = self.world.reset()
@@ -50,7 +69,7 @@ class QLearn(object):
                     best_action = action
                     max_q = val
 
-            assert(best_action != None)
+            assert (best_action != None)
             self.policy[r, c] = best_action
             self.max_qs[r, c] = max_q
 
@@ -59,11 +78,10 @@ class QLearn(object):
         y = self.discount
 
         for r_type, obs in rewards.items():
-            self.q_vals[action][r_type][self.state] = (
-                1 - a) * self.q_vals[action][r_type][self.state] + \
-                a * y * \
-                (obs + self.q_vals[self.policy[next_state]]
-                 [r_type][next_state])
+            self.q_vals[action][r_type][self.state] = (1 - a) * self.q_vals[action][r_type][self.state] + \
+                                                      a * y * \
+                                                      (obs + self.q_vals[self.policy[next_state]]
+                                                      [r_type][next_state])
 
     def update_qs(self, action):
         total = 0.0
@@ -79,14 +97,13 @@ class QLearn(object):
         self.ep_steps += 1
 
         roll = random.random()
-        action = None
-        if roll < self.epsilon():
+        eps = self.epsilon
+        if roll < eps:
             action = random.choice(self.world.actions)
         else:
             action = self.policy[self.state]
 
-        next_state, rewards, total, terminal = self.world.act(
-            self.state, action)
+        next_state, rewards, total, terminal = self.world.act(self.state, action)
 
         self.ep_rewards["total"] += total
 
@@ -100,19 +117,27 @@ class QLearn(object):
         else:
             self.state = next_state
 
+        self.epses.append(eps)
+        # if len(self.epses) % 500 == 0:
+        #     plot_data(verbose_data_dict(None, self.epses),os.getcwd())
         self.find_policy()
 
     def run_ep(self):
         self.state = self.world.reset()
         self.steps = 0
         self.__clean_rewards()
-
+        # ep_length = 0
         while self.state != None:
             self.act()
+            # ep_length += 1
+        # print('ep_length: ', ep_length)
 
     def run_until(self, stop_condition):
         while not stop_condition(self):
+            self.curr_episode += 1
             self.run_ep()
+            self.epsilon = max(self.min_eps,
+                               self.max_eps * ((self.threshold_eps - self.curr_episode)/self.threshold_eps))
 
     def run_fixed_eps(self, num_eps=150):
         eps = 0
@@ -159,3 +184,32 @@ class QLearn(object):
 class QPolicy(object):
     def __init__(self, q_learn):
         self.__learner = q_learn
+
+
+def plot_data(data_dict, plots_dir_path):
+    for x in data_dict:
+        title = x['title']
+        data = x['data']
+        if len(data) == 1:
+            plt.scatter([0], data)
+        else:
+            plt.plot(data)
+        plt.grid(True)
+        plt.title(title)
+        plt.ylabel(x['y_label'])
+        plt.xlabel(x['x_label'])
+        plt.savefig(os.path.join(plots_dir_path, title + ".png"))
+        plt.clf()
+
+    # print('Plot Saved! - ' + plots_dir_path)
+
+
+def verbose_data_dict(loss_data, eps_data):
+    data_dict = []
+    if loss_data is not None and len(loss_data) > 0:
+        data_dict.append({'title': "Loss_vs_Epoch", 'data': loss_data,
+                          'y_label': 'Loss' + '( min: ' + str(min(loss_data)) + ' )', 'x_label': 'Epoch'})
+    if eps_data is not None and len(eps_data) > 0:
+        data_dict.append({'title': "Eps_vs_Epoch", 'data': eps_data,
+                          'y_label': 'Loss' + '( min: ' + str(min(eps_data)) + ' )', 'x_label': 'Epoch'})
+    return data_dict

@@ -22,23 +22,23 @@ class LinearDecay(Decay):
 
     @property
     def end(self) -> float:
-        return self.__start
+        return self.__end
 
     @property
     def steps(self) -> int:
-        return self.__start
-
+        return self.__steps
     @property
     def curr_steps(self) -> int:
-        return self.__start
+        return self.__curr_steps
 
     @property
     def curr_epsilon(self) -> float:
-        return self.__start
+        return self.__curr_epsilon
 
     def __call__(self) -> float:
         self.__curr_steps += 1
         interp = min(self.curr_steps, self.steps) / self.steps
         self.__curr_epsilon = (1 - interp) * self.start + interp * self.end
-
+        # print(self.__curr_epsilon, self.curr_epsilon)
+        # self.curr_epsilon = self.enc
         return self.curr_epsilon

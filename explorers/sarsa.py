@@ -15,13 +15,20 @@ class LinearDecay(object):
 
 
 class Sarsa(object):
-    def __init__(self, q_world, epsilon_start=0.9, epsilon_end=0.1, epsilon_decay_steps=100, discount=0.9, learn_rate=0.1, verbose=True):
+    def __init__(self, q_world, epsilon_start=0.9, epsilon_end=0.1, epsilon_decay_steps=100, discount=0.9, learn_rate=0.01, verbose=True, max_episodes=10000):
         import numpy as np
         from util import LinearDecay
 
         self.world = q_world
-        self.epsilon = LinearDecay(
-            epsilon_start, epsilon_end, epsilon_decay_steps)
+        # self.epsilon = LinearDecay(
+        #     epsilon_start, epsilon_end, epsilon_decay_steps)
+
+        self.epsilon = epsilon_start
+        self.max_eps = epsilon_start
+        self.min_eps = epsilon_end
+        self.max_episodes = max_episodes
+        self.curr_episode = 0
+        self.threshold_eps = 0.8 * max_episodes
 
         self.q_vals = {}
         self.total = {}
@@ -57,7 +64,7 @@ class Sarsa(object):
     def __epsilon_greedy(self, state):
         import random
         roll = random.random()
-        if roll < self.epsilon():
+        if roll < self.epsilon:
             return random.choice(self.world.actions)
         else:
             return self.policy[state]
@@ -121,7 +128,10 @@ class Sarsa(object):
 
     def run_until(self, stop_condition):
         while not stop_condition(self):
+            self.curr_episode += 1
             self.run_ep()
+            self.epsilon = max(self.min_eps,
+                               self.max_eps * ((self.threshold_eps - self.curr_episode)/self.threshold_eps))
 
     def run_fixed_eps(self, num_eps=150):
         eps = 0
