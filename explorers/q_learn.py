@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 class QLearn(object):
     def __init__(self, q_world, epsilon_start=0.9, epsilon_end=0.1, epsilon_decay_steps=4000, discount=0.9,
-                 learn_rate=0.01, verbose=True, max_episodes = 10000):
+                 learn_rate=0.01, verbose=True, max_episodes=10000):
         import numpy as np
         from util import LinearDecay
 
@@ -73,15 +73,16 @@ class QLearn(object):
             self.policy[r, c] = best_action
             self.max_qs[r, c] = max_q
 
-    def observe(self, action, rewards, next_state):
+    def observe(self, action, rewards, next_state, terminal):
         a = self.learn_rate
         y = self.discount
 
         for r_type, obs in rewards.items():
-            self.q_vals[action][r_type][self.state] = (1 - a) * self.q_vals[action][r_type][self.state] + \
-                                                      a * y * \
-                                                      (obs + self.q_vals[self.policy[next_state]]
-                                                      [r_type][next_state])
+            if not terminal:
+                target = obs + y * self.q_vals[self.policy[next_state]][r_type][next_state]
+            else:
+                target = obs
+            self.q_vals[action][r_type][self.state] = (1 - a) * self.q_vals[action][r_type][self.state] + a * target
 
     def update_qs(self, action):
         total = 0.0
@@ -107,7 +108,7 @@ class QLearn(object):
 
         self.ep_rewards["total"] += total
 
-        self.observe(action, rewards, next_state)
+        self.observe(action, rewards, next_state, terminal)
 
         self.update_qs(action)
 
@@ -131,13 +132,17 @@ class QLearn(object):
             self.act()
             # ep_length += 1
         # print('ep_length: ', ep_length)
+        return self.steps
 
     def run_until(self, stop_condition):
+        total_steps = 0
+        start_ep = self.epsilon
         while not stop_condition(self):
             self.curr_episode += 1
-            self.run_ep()
+            total_steps += self.run_ep()
             self.epsilon = max(self.min_eps,
-                               self.max_eps * ((self.threshold_eps - self.curr_episode)/self.threshold_eps))
+                               self.max_eps * ((self.threshold_eps - self.curr_episode) / self.threshold_eps))
+        return (total_steps, start_ep, self.epsilon)
 
     def run_fixed_eps(self, num_eps=150):
         eps = 0
@@ -147,7 +152,7 @@ class QLearn(object):
             eps += 1
             return eps >= num_eps
 
-        self.run_until(ep_counter)
+        return self.run_until(ep_counter)
 
     def __clean_rewards(self):
         for reward in self.world.reward_types:

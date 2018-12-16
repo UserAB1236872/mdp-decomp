@@ -18,7 +18,7 @@ class SolutionMonitor(object):
         self.max_steps = max_steps
 
         self.samples = np.arange(
-            sample_step, max_steps+sample_step, step=sample_step, dtype=int)
+            sample_step, max_steps + sample_step, step=sample_step, dtype=int)
         num_samples = self.samples.shape
 
         self.curr_index = 0
@@ -89,16 +89,18 @@ class SolutionMonitor(object):
             logging.warn("Exact solution not found yet, solving")
             self.exact.solve()
 
-        logging.info("Run %d; Running batch %d (episodes %d-%d/%d)" % (self.runs+1, self.curr_index+1, self.curr_index *
-                                                                       self.sample_step, self.curr_index*self.sample_step+self.sample_step, self.max_steps))
-
         for name, solver in self.solvers.items():
             solver.run_fixed_eps(num_eps=self.sample_step)
             self.compute_deviations(solver, name, self.curr_index)
 
+        logging.info("Run %d; Running batch %d (episodes %d-%d/%d) (start epsilon: %d ,end epsilon: %d" %
+                     (self.runs + 1, self.curr_index + 1, self.curr_index * self.sample_step,
+                      self.curr_index * self.sample_step + self.sample_step, self.max_steps, st_eps, end_eps))
+
         self.curr_index += 1
 
-    def multi_run(self, checkpoint=True, num_iters=100, graph_file="graph.html", text_file="solved.txt", append_runs=True):
+    def multi_run(self, checkpoint=True, num_iters=100, graph_file="graph.html", text_file="solved.txt",
+                  append_runs=True):
         if num_iters < 1:
             return
 
@@ -108,7 +110,7 @@ class SolutionMonitor(object):
         if num_iters == 1:
             return
 
-        while self.runs < num_iters-1:
+        while self.runs < num_iters - 1:
             self.compute(output=checkpoint, graph_file=graph_file,
                          text_file=text_file, append=append_runs)
 
@@ -150,7 +152,7 @@ class SolutionMonitor(object):
             #     'deviation':}
             mode='vline'
         ))
-        #pylint: disable=E1136
+        # pylint: disable=E1136
         plot.below[0].formatter.use_scientific = False
 
         plots = []
@@ -159,24 +161,29 @@ class SolutionMonitor(object):
             p0 = plot.line(
                 self.samples, self.max_deviations[name] / self.runs, line_color=color, name="%s Max Deviation" % name)
             p1 = plot.line(
-                self.samples, self.avg_max_deviation[name] / self.runs, line_color=color, line_dash="4 4", name="%s Avg Max Devation" % name)
+                self.samples, self.avg_max_deviation[name] / self.runs, line_color=color, line_dash="4 4",
+                name="%s Avg Max Devation" % name)
             p2 = plot.circle(
-                self.samples, self.avg_deviations[name] / self.runs, fill_color="white", line_color=color, name="%s Avg Deviation" % name)
+                self.samples, self.avg_deviations[name] / self.runs, fill_color="white", line_color=color,
+                name="%s Avg Deviation" % name)
             p2b = plot.line(
-                self.samples, self.avg_deviations[name] / self.runs, line_dash="4 4", line_color=color, name="%s Avg Deviation" % name)
+                self.samples, self.avg_deviations[name] / self.runs, line_dash="4 4", line_color=color,
+                name="%s Avg Deviation" % name)
             p3 = plot.circle(
-                self.samples, self.total_max_deviations[name] / self.runs, fill_color=color, line_color=color, name="%s Total Max Deviation (total Q-values)" % name)
+                self.samples, self.total_max_deviations[name] / self.runs, fill_color=color, line_color=color,
+                name="%s Total Max Deviation (total Q-values)" % name)
             p4 = plot.line(
-                self.samples, self.total_max_deviations[name] / self.runs, line_color=color, line_dash="2 2", name="%s Total Max Deviation (total Q-values)" % name)
+                self.samples, self.total_max_deviations[name] / self.runs, line_color=color, line_dash="2 2",
+                name="%s Total Max Deviation (total Q-values)" % name)
 
             plots.append(LegendItem(label="Max Deviation for % s" %
-                                    name, renderers=[p0]))
+                                          name, renderers=[p0]))
             plots.append(LegendItem(label="Avg Deviation for %s" %
-                                    name, renderers=[p2, p2b]))
+                                          name, renderers=[p2, p2b]))
             plots.append(LegendItem(label="Total Max Deviation for %s" %
-                                    name, renderers=[p3, p4]))
+                                          name, renderers=[p3, p4]))
             plots.append(LegendItem(label="Avg Max Deviation for %s (Avg of Max Devs across Reward Types)" %
-                                    name, renderers=[p1]))
+                                          name, renderers=[p1]))
 
             color = RGB(int(color[1:3], base=16), int(
                 color[3:5], base=16), int(color[5:], base=16))
@@ -185,7 +192,7 @@ class SolutionMonitor(object):
                 pr = plot.line(self.samples, max_dev / self.runs, line_color=color, line_dash="%d %d" % (
                     i, i), name="%s Deviation for %s" % (r_type, name))
                 plots.append(LegendItem(label="%s Deviation for %s" %
-                                        (r_type, name), renderers=[pr]))
+                                              (r_type, name), renderers=[pr]))
 
         legend = Legend(items=plots)
         legend.click_policy = "hide"

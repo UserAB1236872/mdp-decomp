@@ -4,7 +4,7 @@ def main():
     from explorers.q_learn import QLearn
     from explorers.sarsa import Sarsa
     from explorers.dqn import DQN
-    from explorers.dqn.model import RewardMajorModel, DQNLinear, DecompDQNModel
+    from explorers.dqn.model import RewardMajorModel, DecompDQNModel
     from monitors.closeness import SolutionMonitor
     import numpy as np
     import logging
@@ -23,7 +23,7 @@ def main():
     # explorers = [make_dqn]
     exact = QIter
 
-    monitor = SolutionMonitor(world, exact, explorers, max_steps=10000)
+    monitor = SolutionMonitor(world, exact, explorers, max_steps=5000)
     monitor.multi_run()
 
 

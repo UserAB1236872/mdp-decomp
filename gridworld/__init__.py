@@ -5,18 +5,18 @@ import itertools
 class Gridworld(object):
     def __init__(self, rewards, terminals, misfires, impassable, world_shape, name, misfire_prob=0.1):
         self.__terminals = terminals
-        assert(terminals.shape == world_shape)
+        assert (terminals.shape == world_shape)
         self.__misfires = misfires
-        assert(misfires.shape == world_shape)
+        assert (misfires.shape == world_shape)
         self.__impassable = impassable
-        assert(impassable.shape == world_shape)
+        assert (impassable.shape == world_shape)
         self.__rewards = rewards
 
         self.__shape = world_shape
         self.__total_reward = np.zeros(world_shape)
         for _, vals in self.rewards.items():
             self.__total_reward += vals
-            assert(world_shape == vals.shape)
+            assert (world_shape == vals.shape)
 
         self.__actions = ['u', 'd', 'l', 'r']
         self.__misfire_prob = misfire_prob
@@ -66,15 +66,16 @@ class Gridworld(object):
 
         Will raise an exception if given an impassable state.
         """
-        assert(0 <= state[0] < self.shape[0])
-        assert(0 <= state[1] < self.shape[1])
-        assert(len(state) == 2)
+        assert (0 <= state[0] < self.shape[0])
+        assert (0 <= state[1] < self.shape[1])
+        assert (len(state) == 2)
         if self.impassable[state]:
             raise Exception("Tile is impassable")
 
         out = np.zeros(self.shape, dtype=float)
         out[state] = 1.0
-        return out
+        # return out
+        return np.array([state[0] / self.shape[0], state[1] / self.shape[1]])
 
     def nonterminal_states(self):
         return filter(lambda x: not self.terminals[x], self.states)
@@ -128,7 +129,7 @@ class Gridworld(object):
 
     def transition_prob(self, state, action, nxt):
         succs = self.__direct_succ_map(state)
-        assert(action in self.actions)
+        assert (action in self.actions)
         if nxt not in succs.values() or self.impassable[nxt]:
             return 0.0
 

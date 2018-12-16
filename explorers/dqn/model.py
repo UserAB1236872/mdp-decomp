@@ -1,7 +1,9 @@
 from abc import ABC, ABCMeta, abstractmethod, abstractproperty
 from torch.nn import Module, MSELoss, Linear
 from torch.optim import Adam
+import torch
 from torch.autograd import Variable
+
 from torch import FloatTensor
 import os
 import matplotlib as mpl
@@ -22,20 +24,21 @@ class DQNModel(ABC):
         raise NotImplementedError
 
 
-class DQNLinear(Module):
-    def __init__(self, num_inputs, num_outputs):
-        super().__init__()
-        # self.layer1 = Linear(num_inputs, 10)
-        # self.layer2 = Linear(10, num_outputs)
-        self.layer1 = Linear(num_inputs, num_outputs)
+# class DQNLinear(Module):
+#     def __init__(self, num_inputs, num_outputs):
+#         super().__init__()
+#         self.layer1 = Linear(num_inputs, 10)
+#         self.layer2 = Linear(10, num_outputs)
+#         # self.layer1 = Linear(num_inputs, num_outputs)
+#
+#     def forward(self, x):
+#         out = self.layer2(F.relu(self.layer1(x))
+#         # out = self.layer1(x)
+#         # out = self.layer2(out)
+#         return out
 
-    def forward(self, x):
-        out = self.layer1(x)
-        # out = self.layer1(x)
-        # out = self.layer2(out)
-        return out
 
-
+# Sepreate Network for each reward type
 class DecompDQNModel(nn.Module):
     def __init__(self, state_size, reward_types, actions):
         super(DecompDQNModel, self).__init__()
@@ -51,6 +54,31 @@ class DecompDQNModel(nn.Module):
 
     def forward(self, input, r_type):
         return getattr(self, 'model_{}'.format(r_type))(input)
+
+
+# Sepreate Network for each Action type
+# class DecompDQNModel(nn.Module):
+#     def __init__(self, state_size, reward_types, actions):
+#         super(DecompDQNModel, self).__init__()
+#         self.actions = {action: i for (i, action) in enumerate(actions)}
+#         self.reward_types = reward_types
+#         self.state_size = state_size
+#
+#         # self.models = {}
+#         for i in range(len(actions)):
+#             model = nn.Sequential(nn.Linear(state_size,len(self.reward_types)))
+#             setattr(self, 'model_{}'.format(i), model)
+#         # for r_type in reward_types:
+#         #     model = nn.Sequential(nn.Linear(state_size, len(actions)))
+#         #     setattr(self, 'model_{}'.format(r_type), model)
+#
+#     def forward(self, input, r_type):
+#         r_i = self.reward_types.index(r_type)
+#         out = None
+#         for i in range(len(self.actions)):
+#             act_out = getattr(self,'model_{}'.format(i))(input)[:,r_i].reshape(input.shape[0],1)
+#             out = act_out if out is None else torch.cat((out,act_out),dim=1)
+#         return out
 
 
 class RewardMajorModel(DQNModel):
@@ -75,7 +103,7 @@ class RewardMajorModel(DQNModel):
         self.looses = []
 
     def update(self, curr_states, next_states,
-               actions, rewards, discount, curr_model, eval_model, optimizer):
+               actions, rewards,terminals, discount, curr_model, eval_model, optimizer):
         reward_major = {}
         # batch_size = len(actions)
         for r_map in rewards:
@@ -106,23 +134,26 @@ class RewardMajorModel(DQNModel):
             reward_batch = FloatTensor(reward_major[r_type])
             target_q = Variable(
                 r_type_qs[r_type].data.clone(), requires_grad=False)
-            eval_next_qs = eval_model(next_states,r_type).data
+            eval_next_qs = eval_model(next_states, r_type).data
             for i, rwd in enumerate(reward_batch):
-                target_q[i, policy_actions[i].data[0]] = rwd + discount * \
-                                                         eval_next_qs[i, policy_next_actions[i].data[0]]
+                act_i = policy_actions[i].data.item()
+                target_q[i, act_i] = rwd
+                if not terminals[i]:
+                    target_q[i, act_i] += discount * eval_next_qs[i, act_i]
 
             loss += MSELoss()(r_type_qs[r_type], target_q)
+        loss /= curr_states.shape[0]
         loss.backward()
         optimizer.step()
         self.looses.append(loss.data.item())
         # if len(self.looses) % 100 == 0:
         #     plot_data(verbose_data_dict(self.looses), os.getcwd())
 
-    def eval(self,model, state):
+    def eval(self, model, state):
         out = {}
         for r_type in self.reward_types:
             pred = model(Variable(FloatTensor(
-                state.flatten()).unsqueeze(0)),r_type).cpu().data[0].numpy()
+                state.flatten()).unsqueeze(0)), r_type).cpu().data[0].numpy()
             for action, i in self.actions.items():
                 if action not in out:
                     out[action] = {}
