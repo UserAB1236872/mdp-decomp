@@ -93,9 +93,9 @@ class SolutionMonitor(object):
             solver.run_fixed_eps(num_eps=self.sample_step)
             self.compute_deviations(solver, name, self.curr_index)
 
-        logging.info("Run %d; Running batch %d (episodes %d-%d/%d) (start epsilon: %d ,end epsilon: %d" %
+        logging.info("Run %d; Running batch %d (episodes %d-%d/%d)" %
                      (self.runs + 1, self.curr_index + 1, self.curr_index * self.sample_step,
-                      self.curr_index * self.sample_step + self.sample_step, self.max_steps, st_eps, end_eps))
+                      self.curr_index * self.sample_step + self.sample_step, self.max_steps))
 
         self.curr_index += 1
 
