@@ -74,8 +74,8 @@ class Gridworld(object):
 
         out = np.zeros(self.shape, dtype=float)
         out[state] = 1.0
-        # return out
-        return np.array([state[0] / self.shape[0], state[1] / self.shape[1]])
+        return out
+        # return np.array([state[0] / self.shape[0], state[1] / self.shape[1]])
 
     def nonterminal_states(self):
         return filter(lambda x: not self.terminals[x], self.states)

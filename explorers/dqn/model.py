@@ -49,8 +49,13 @@ class DecompDQNModel(nn.Module):
         # self.models = {}
 
         for r_type in reward_types:
-            model = nn.Sequential(nn.Linear(state_size, len(actions)))
+            model = nn.Linear(state_size, len(actions), bias=False)
             setattr(self, 'model_{}'.format(r_type), model)
+
+            # getattr(self, 'model_{}'.format(r_type))._modules['0'].weight.data.fill_(0)
+            # getattr(self, 'model_{}'.format(r_type))._modules['0'].bias.data.fill_(0)
+            getattr(self, 'model_{}'.format(r_type)).weight.data.fill_(0)
+            # getattr(self, 'model_{}'.format(r_type)).bias.data.fill_(0)
 
     def forward(self, input, r_type):
         return getattr(self, 'model_{}'.format(r_type))(input)
@@ -103,7 +108,7 @@ class RewardMajorModel(DQNModel):
         self.looses = []
 
     def update(self, curr_states, next_states,
-               actions, rewards,terminals, discount, curr_model, eval_model, optimizer):
+               actions, rewards, terminals, discount, curr_model, eval_model, optimizer):
         reward_major = {}
         # batch_size = len(actions)
         for r_map in rewards:
@@ -113,37 +118,53 @@ class RewardMajorModel(DQNModel):
                 reward_major[r_type].append(obs)
 
         r_type_qs = {}
-        policy_qs, policy_next_qs = None, None
+        # policy_qs, policy_next_qs = None, None
+        non_final_mask = 1 - torch.ByteTensor(terminals)
+        non_final_next_states = next_states[non_final_mask]
+        # for r_type in self.reward_types:
+        #     input = Variable(curr_states.data.clone(), requires_grad=True)
+        #     r_type_qs[r_type] = curr_model(input, r_type)
+        #     r_type_qs[r_type] = r_type_qs[r_type].gather(1, torch.LongTensor(actions).unsqueeze(1))
+        #     # policy_qs = r_type_qs[r_type] + (policy_qs if policy_qs is not None else 0)
+        #     policy_next_qs = curr_model(next_states, r_type) + (policy_next_qs if policy_next_qs is not None else 0)
+        # # for r_type, model in self.models.items():
+        # #     r_type_qs[r_type] = model['nn'](Variable(curr_states.data.clone(), requires_grad=True))
+        # #     policy_qs = r_type_qs[r_type] + (policy_qs if policy_qs is not None else 0)
+        # #     policy_next_qs = model['nn'](next_states) + (policy_next_qs if policy_next_qs is not None else 0)
+        #
+        # # _, policy_actions = policy_qs.max(1)
+        # policy_next_qs, policy_next_actions = policy_next_qs.max(1)
+        actions = torch.LongTensor(actions).unsqueeze(1)
+        loss = 0
         for r_type in self.reward_types:
             input = Variable(curr_states.data.clone(), requires_grad=True)
-            r_type_qs[r_type] = curr_model(input, r_type)
-            policy_qs = r_type_qs[r_type] + (policy_qs if policy_qs is not None else 0)
-            policy_next_qs = curr_model(next_states, r_type) + (policy_next_qs if policy_next_qs is not None else 0)
-        # for r_type, model in self.models.items():
-        #     r_type_qs[r_type] = model['nn'](Variable(curr_states.data.clone(), requires_grad=True))
-        #     policy_qs = r_type_qs[r_type] + (policy_qs if policy_qs is not None else 0)
-        #     policy_next_qs = model['nn'](next_states) + (policy_next_qs if policy_next_qs is not None else 0)
-
-        _, policy_actions = policy_qs.max(1)
-        policy_next_qs, policy_next_actions = policy_next_qs.max(1)
-        optimizer.zero_grad()
-        loss = 0
-
-        for r_type in self.reward_types:
+            predicted = curr_model(input, r_type).gather(1, actions)
             # typed_eval_model = getattr(eval_model, 'model_{}'.format(r_type))
             reward_batch = FloatTensor(reward_major[r_type])
-            target_q = Variable(
-                r_type_qs[r_type].data.clone(), requires_grad=False)
-            eval_next_qs = eval_model(next_states, r_type).data
-            for i, rwd in enumerate(reward_batch):
-                act_i = policy_actions[i].data.item()
-                target_q[i, act_i] = rwd
-                if not terminals[i]:
-                    target_q[i, act_i] += discount * eval_next_qs[i, act_i]
+            # target_q = Variable(
+            #     r_type_qs[r_type].data.clone(), requires_grad=False)
+            target_q = Variable(torch.zeros(predicted.shape), requires_grad=False)
+            target_q[non_final_mask] = eval_model(non_final_next_states, r_type).max(1)[0].unsqueeze(1)
+            # target_q[non_final_mask] = eval_model(non_final_next_states,r_type).max(1)[0].detach()
+            target_q = reward_batch + (discount * target_q)
 
-            loss += MSELoss()(r_type_qs[r_type], target_q)
-        loss /= curr_states.shape[0]
+            # eval_next_qs = eval_model(next_states, r_type).data
+            # for i, rwd in enumerate(reward_batch):
+            #     # act_i = policy_actions[i].data.item()
+            #     act_i = policy_next_actions[i].data.item()
+            #     target_q[i, act_i] = rwd
+            #     if not terminals[i]:
+            #         target_q[i, act_i] += discount * eval_next_qs[i, act_i]
+            #     # if not terminals[i]:
+            #     #     target_q[i, act_i] += discount * curr_model[i, act_i]
+
+            loss += MSELoss()(predicted, target_q)
+        # loss /= curr_states.shape[0]
+        optimizer.zero_grad()
         loss.backward()
+        # torch.nn.utils.clip_grad_norm_(curr_model.parameters(), 50)
+        for param in curr_model.parameters():
+            param.grad.data.clamp_(-50, 50)
         optimizer.step()
         self.looses.append(loss.data.item())
         # if len(self.looses) % 100 == 0:

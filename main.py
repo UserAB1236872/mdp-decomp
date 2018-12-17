@@ -23,7 +23,7 @@ def main():
     # explorers = [make_dqn]
     exact = QIter
 
-    monitor = SolutionMonitor(world, exact, explorers, max_steps=5000)
+    monitor = SolutionMonitor(world, exact, explorers, max_steps=3000)
     monitor.multi_run()
 
 

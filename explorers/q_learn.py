@@ -73,7 +73,7 @@ class QLearn(object):
             self.policy[r, c] = best_action
             self.max_qs[r, c] = max_q
 
-    def observe(self, action, rewards, next_state, terminal):
+    def observe(self, action,action_i, rewards, next_state, terminal):
         a = self.learn_rate
         y = self.discount
 
@@ -103,12 +103,12 @@ class QLearn(object):
             action = random.choice(self.world.actions)
         else:
             action = self.policy[self.state]
-
+        act_i = self.world.actions.index(action)
         next_state, rewards, total, terminal = self.world.act(self.state, action)
 
         self.ep_rewards["total"] += total
 
-        self.observe(action, rewards, next_state, terminal)
+        self.observe(action,act_i, rewards, next_state, terminal)
 
         self.update_qs(action)
 
