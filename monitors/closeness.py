@@ -91,6 +91,8 @@ class SolutionMonitor(object):
 
         for name, solver in self.solvers.items():
             solver.run_fixed_eps(num_eps=self.sample_step)
+            if (self.curr_index * self.sample_step + self.sample_step) == 4900:
+                print('abc')
             self.compute_deviations(solver, name, self.curr_index)
 
         logging.info("Run %d; Running batch %d (episodes %d-%d/%d)" %

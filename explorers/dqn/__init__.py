@@ -103,9 +103,9 @@ class DQN(QLearn):
         if self.eps % self.swap_interval:
             if self.verbose:
                 logging.info("Swapping models")
-            curr_params = self.curr_model.state_dict()
-            # eval_params = self.eval_model.state_dict()
-            self.eval_model.load_state_dict(curr_params)
+            # curr_params = self.curr_model.state_dict()
+            # # eval_params = self.eval_model.state_dict()
+            # self.eval_model.load_state_dict(curr_params)
             # self.curr_model.load_state_dict(eval_params)
 
         if self.verbose:

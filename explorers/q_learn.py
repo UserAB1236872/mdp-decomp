@@ -78,10 +78,14 @@ class QLearn(object):
         y = self.discount
 
         for r_type, obs in rewards.items():
-            if not terminal:
-                target = obs + y * self.q_vals[self.policy[next_state]][r_type][next_state]
-            else:
-                target = obs
+            # if not terminal:
+            #     target = obs + y * self.q_vals[self.policy[next_state]][r_type][next_state]
+            # else:
+            #     target = obs
+            # if obs != 0:
+            #     print('a')
+
+            target = y * (obs + self.q_vals[self.policy[next_state]][r_type][next_state])
             self.q_vals[action][r_type][self.state] = (1 - a) * self.q_vals[action][r_type][self.state] + a * target
 
     def update_qs(self, action):

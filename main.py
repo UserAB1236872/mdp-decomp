@@ -20,10 +20,11 @@ def main():
         return DQN(w, DecompDQNModel, RewardMajorModel, verbose=verbose, max_episodes=max_episodes)
 
     explorers = [QLearn, Sarsa, make_dqn]
+    # explorers = [QLearn]
     # explorers = [make_dqn]
     exact = QIter
 
-    monitor = SolutionMonitor(world, exact, explorers, max_steps=3000)
+    monitor = SolutionMonitor(world, exact, explorers, max_steps=10000)
     monitor.multi_run()
 
 

@@ -121,6 +121,7 @@ class RewardMajorModel(DQNModel):
         # policy_qs, policy_next_qs = None, None
         non_final_mask = 1 - torch.ByteTensor(terminals)
         non_final_next_states = next_states[non_final_mask]
+
         # for r_type in self.reward_types:
         #     input = Variable(curr_states.data.clone(), requires_grad=True)
         #     r_type_qs[r_type] = curr_model(input, r_type)
@@ -134,19 +135,30 @@ class RewardMajorModel(DQNModel):
         #
         # # _, policy_actions = policy_qs.max(1)
         # policy_next_qs, policy_next_actions = policy_next_qs.max(1)
+        policy_next_qs = None
+        for r_type in self.reward_types:
+            next_r_qs = curr_model(next_states,r_type)
+            policy_next_qs = next_r_qs + (policy_next_qs if policy_next_qs is not None else 0)
+        policy_next_actions = policy_next_qs.max(1)[1].unsqueeze(1)
+        policy_next_actions = policy_next_actions[non_final_mask]
+
+        #
+        #     policy_next_qs[r_type] = curr_model(next_states,r_type) + (policy_next_qs[r_type] if policy_next_qs is not None else 0)
+        # policy_next_qs = policy_next_qs.max(1)[0].unsqueeze(1)
+
         actions = torch.LongTensor(actions).unsqueeze(1)
         loss = 0
         for r_type in self.reward_types:
             input = Variable(curr_states.data.clone(), requires_grad=True)
             predicted = curr_model(input, r_type).gather(1, actions)
             # typed_eval_model = getattr(eval_model, 'model_{}'.format(r_type))
-            reward_batch = FloatTensor(reward_major[r_type])
+            reward_batch = FloatTensor(reward_major[r_type]).unsqueeze(1)
             # target_q = Variable(
             #     r_type_qs[r_type].data.clone(), requires_grad=False)
             target_q = Variable(torch.zeros(predicted.shape), requires_grad=False)
-            target_q[non_final_mask] = eval_model(non_final_next_states, r_type).max(1)[0].unsqueeze(1)
+            target_q[non_final_mask] = curr_model(non_final_next_states, r_type).gather(1,policy_next_actions)
             # target_q[non_final_mask] = eval_model(non_final_next_states,r_type).max(1)[0].detach()
-            target_q = reward_batch + (discount * target_q)
+            target_q = discount * (reward_batch + target_q)
 
             # eval_next_qs = eval_model(next_states, r_type).data
             # for i, rwd in enumerate(reward_batch):
@@ -162,9 +174,9 @@ class RewardMajorModel(DQNModel):
         # loss /= curr_states.shape[0]
         optimizer.zero_grad()
         loss.backward()
-        # torch.nn.utils.clip_grad_norm_(curr_model.parameters(), 50)
-        for param in curr_model.parameters():
-            param.grad.data.clamp_(-50, 50)
+        torch.nn.utils.clip_grad_norm_(curr_model.parameters(), 100)
+        # for param in curr_model.parameters():
+        #     param.grad.data.clamp_(100, 100)
         optimizer.step()
         self.looses.append(loss.data.item())
         # if len(self.looses) % 100 == 0:
