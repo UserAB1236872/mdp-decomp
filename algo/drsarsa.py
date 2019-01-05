@@ -3,7 +3,7 @@ import random
 from .utils import _LinearDecay
 
 
-class DRSarsa():
+class DRSarsa:
     """ Sarsa for Decomposed Rewards"""
 
     def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):

@@ -35,8 +35,12 @@ if __name__ == '__main__':
     parser.add_argument('--total_episodes', type=int, default=10000, help='Total Number of episodes for training')
     parser.add_argument('--eval_episodes', type=int, default=10, help='Number of episodes for evaluation/interval')
     parser.add_argument('--train_interval', type=int, default=100, help='No. of Episodes per training interval')
+    parser.add_argument('--runs', type=int, default=1, help='Experiment Repetition Count')
+
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
+    if not os.path.exists(args.result_dir):
+        os.makedirs(args.result_dir)
 
     # initialize environment
     env_fn = lambda: gym.make(args.env)
@@ -47,5 +51,5 @@ if __name__ == '__main__':
     solvers = [q_solver, sarsa_solver]
 
     # Fire it up!
-    monitor.run(env_fn(), solvers, args.total_episodes, args.eval_episodes,
+    monitor.run(env_fn, solvers, args.runs, args.total_episodes, args.eval_episodes,
                 args.train_interval, result_path=args.result_dir)

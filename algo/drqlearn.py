@@ -3,18 +3,10 @@ import random
 from .utils import _LinearDecay
 
 
-class DRQLearn():
+class DRQLearn:
     """ Q-Learning for Decomposed Rewards"""
 
     def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):
-        """
-        :param lr: learning rate (remains constant through training)
-        :param discount: discount rate
-        :param min_eps: Minimum epsilon rate for exploration
-        :param max_eps: Maximum epsilon rate for exploration
-        :param total_episodes: Total Number of episodes for which training would be executed.
-                               This is used to decay exploration rate.
-        """
         self.env = env
         self.actions = env.action_space.n
         self.reward_types = env.reward_types.n

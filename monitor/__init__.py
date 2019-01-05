@@ -21,7 +21,7 @@ def test(env_fn, solver, eps, start_seed, processes=4):
     return result
 
 
-def run(env_fn, solvers, max_eps, eval_eps, interval, result_path):
+def run(env_fn, solvers, runs, max_eps, eval_eps, interval, result_path):
     """
     :param env_fn: creates an instance of the environment
     :param solvers: list of solvers
@@ -32,18 +32,19 @@ def run(env_fn, solvers, max_eps, eval_eps, interval, result_path):
 
     """
     info = {solver.__name__: {'test': []} for solver in solvers}
-    curr_eps = 0
-    while curr_eps <= max_eps:
-        # train each solver
-        # Todo: perform parallely
-        for solver in solvers:
-            solver.train(episodes=interval)
-            pass
+    for _ in range(runs):
+        curr_eps = 0
+        while curr_eps <= max_eps:
+            # train each solver
+            # Todo: parallel execution
+            for solver in solvers:
+                solver.train(episodes=interval)
+                pass
 
-        # evaluate each solver
-        for solver in solvers:
-            perf = test(env_fn, solver, eval_eps, start_seed=curr_eps)
-            info[solver.__name__]['test'].append(perf)
+            # evaluate each solver
+            for solver in solvers:
+                perf = test(env_fn, solver, eval_eps, start_seed=curr_eps)
+                info[solver.__name__]['test'].append(perf)
 
-        # save results
-        curr_eps += interval
+            # save results
+            curr_eps += interval

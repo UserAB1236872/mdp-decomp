@@ -5,7 +5,7 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward', 'done'))
 
 
-class _LinearDecay():
+class _LinearDecay:
     """ Linearly Decays epsilon for exploration between a range of episodes"""
 
     def __init__(self, min_eps, max_eps, total_episodes):
@@ -22,7 +22,7 @@ class _LinearDecay():
         self.eps = max(self.min_eps, eps)
 
 
-class ReplayMemory():
+class ReplayMemory:
 
     def __init__(self, capacity):
         self.capacity = capacity
