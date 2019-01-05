@@ -8,8 +8,6 @@ class DRQLearn():
 
     def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):
         """
-        :param actions: Count of available actions
-        :param reward_types: Count of available reward types
         :param lr: learning rate (remains constant through training)
         :param discount: discount rate
         :param min_eps: Minimum epsilon rate for exploration
@@ -27,10 +25,9 @@ class DRQLearn():
         self.q_values = {}
 
     def update(self, state, action, next_state, reward, done):
-        if state not in self.q_values:
-            self.q_values[state] = {a: {r: 0 for r in range(self.reward_types)} for a in range(self.actions)}
-        if next_state not in self.q_values:
-            self.q_values[state] = {a: {r: 0 for r in range(self.reward_types)} for a in range(self.actions)}
+        for s in [state, next_state]:
+            if s not in self.q_values:
+                self.q_values[s] = {a: {r: 0 for r in range(self.reward_types)} for a in range(self.actions)}
 
         next_state_action = self.act(next_state)
         for r_i, r in enumerate(reward):

@@ -6,10 +6,11 @@ def _test(env_fn, solver, seed):
     env = env_fn()
     env.seed(seed)
     ep_reward = []
-    obs = env.reset()
+    state = env.reset()
+    done = False
     while not done:
-        action = solver.act(obs)
-        obs, reward, done, info = env.step(action)
+        action = solver.act(state)
+        state, reward, done, info = env.step(action)
         ep_reward.append(reward)
     return ep_reward
 

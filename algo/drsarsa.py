@@ -25,10 +25,9 @@ class DRSarsa():
         self.q_values = {}
 
     def update(self, state, action, next_state, next_state_action, reward, done):
-        if state not in self.q_values:
-            self.q_values[state] = {a: {r: 0 for r in range(self.reward_types)} for a in range(self.actions)}
-        if next_state not in self.q_values:
-            self.q_values[state] = {a: {r: 0 for r in range(self.reward_types)} for a in range(self.actions)}
+        for s in [state, next_state]:
+            if s not in self.q_values:
+                self.q_values[s] = {a: {r: 0 for r in range(self.reward_types)} for a in range(self.actions)}
 
         for r_i, r in enumerate(reward):
             target = r
