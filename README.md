@@ -1,2 +1,0 @@
-# mdp-decomp
-MDP Decompositions
