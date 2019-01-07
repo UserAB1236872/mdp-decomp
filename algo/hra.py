@@ -12,13 +12,16 @@ class HRA:
         Reference: https://arxiv.org/pdf/1706.04208.pdf
     """
 
-    def __init__(self, env, model, lr, discount, mem_len, batch_size, min_eps, max_eps, total_episodes):
+    def __init__(self, env, model, lr, discount, mem_len, batch_size, min_eps, max_eps, total_episodes, eps_max_steps):
 
         self.env = env
         self.actions = env.action_space.n
-        self.reward_types = env.reward_types.n
+        # Todo: uncomment following
+        # self.reward_types = env.reward_types.n
+        self.reward_types = 4
         self.lr = lr
         self.discount = discount
+        self.eps_max_steps = eps_max_steps
         self.linear_decay = _LinearDecay(min_eps, max_eps, total_episodes)
 
         self.model = model
@@ -35,11 +38,11 @@ class HRA:
             transitions = self.memory.sample(self.batch_size)
             batch = Transition(*zip(*transitions))
 
-            state_batch = torch.cat(batch.state)
-            action_batch = torch.cat(batch.action)
-            reward_batch = torch.cat(batch.reward)
-            next_state_batch = torch.cat(batch.next_state)
-            non_final_mask = 1 - torch.ByteTensor(torch.cat(batch.done))
+            state_batch = torch.FloatTensor(list(batch.state))
+            action_batch = torch.LongTensor(list(batch.action)).unsqueeze(1)
+            reward_batch = torch.FloatTensor(list(batch.reward))
+            next_state_batch = torch.FloatTensor(list(batch.next_state))
+            non_final_mask = 1 - torch.ByteTensor(list(batch.done))
             non_final_next_state_batch = next_state_batch[non_final_mask]
 
             # calculate loss for each reward type
@@ -47,9 +50,9 @@ class HRA:
             for rt in range(self.reward_types):
                 state = Variable(state_batch.data.clone(), requires_grad=True)
                 predicted_q = self.model(state, rt).gather(1, action_batch)
-                reward = torch.FloatTensor(reward_batch[rt])
+                reward = reward_batch[:, rt].unsqueeze(1)
                 target_q = Variable(torch.zeros(predicted_q.shape), requires_grad=False)
-                target_q[non_final_mask] = self.model(non_final_next_state_batch, rt).max(1)[0].detach()
+                target_q[non_final_mask] = self.model(non_final_next_state_batch, rt).max(1)[0].detach().unsqueeze(1)
                 target_q = reward + self.discount * target_q
                 loss += MSELoss()(predicted_q, target_q)
 
@@ -59,18 +62,20 @@ class HRA:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
             self.optimizer.step()
 
+    def _select_action(self, state):
+        if self.linear_decay.eps > random.random():
+            return random.choice(range(self.actions))
+        else:
+            return self.act(state)
+
     def train(self, episodes):
         for ep in range(episodes):
             done = False
             state = self.env.reset()
             while not done:
-                if self.linear_decay.eps > random.random():
-                    action = random.choice(range(self.actions))
-                else:
-                    action = self.act(state)
-
-                next_state, reward, done, info = self.env.step(action)
-
+                action = self._select_action(state)
+                next_state, _, done, info = self.env.step(action)
+                reward = [info['reward_decomposition'][k] for k in sorted(info['reward_decomposition'].keys())]
                 self.update(state, action, next_state, reward, done)
                 state = next_state
 
@@ -84,5 +89,9 @@ class HRA:
 
     def act(self, state):
         """ returns greedy action"""
-        return np.argmax(sum([self.q_values[state][a][r_i] for r_i in range(self.reward_types)])
-                         for a in range(self.actions))
+        state = torch.FloatTensor(state).unsqueeze(0)
+        q_values = None
+        for rt in range(self.reward_types):
+            rt_q_value = self.model(state, rt)
+            q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
+        return int(q_values.sum(0).max(0)[1].data.numpy())
