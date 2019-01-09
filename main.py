@@ -4,7 +4,7 @@ import gym, gym_decomp.gridworld
 import torch
 import monitor
 import torch.nn as nn
-from algo import DRQLearn, DRSarsa, DRDQN, HRA
+from algo import DRQLearn, DRSarsa, DRDSarsa, DRDQN, HRA
 
 
 class DRModel(nn.Module):
@@ -63,11 +63,15 @@ if __name__ == '__main__':
     dr_dqn_solver = DRDQN(env_fn(), dr_dqn_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
                           args.max_eps, args.total_episodes, args.episode_max_steps)
 
+    dr_dsarsa_model = DRModel(state.size, actions, reward_types)
+    dr_dsarsa_solver = DRDSarsa(env_fn(), dr_dsarsa_model, args.lr, args.discount, args.mem_len, args.batch_size,
+                                args.min_eps, args.max_eps, args.total_episodes, args.episode_max_steps)
+
     hra_model = DRModel(state.size, actions, reward_types)
     hra_solver = HRA(env_fn(), hra_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
-                       args.max_eps, args.total_episodes, args.episode_max_steps)
-    solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, hra_solver]
+                     args.max_eps, args.total_episodes, args.episode_max_steps)
+    solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
 
     # Fire it up!
-    monitor.run(env_fn(), solvers, args.runs, args.total_episodes, args.eval_episodes,args.episode_max_steps,
+    monitor.run(env_fn(), solvers, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
                 args.train_interval, result_path=args.result_dir)
