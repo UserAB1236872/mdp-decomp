@@ -1,6 +1,6 @@
 import argparse
 import os
-import gym, gym_decomp.gridworld
+import gym, gym_decomp
 import torch
 import monitor
 import torch.nn as nn
@@ -31,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
     parser.add_argument('--lr', type=float, default=0.01, help='Learning rate')
     parser.add_argument('--min_eps', type=float, default=0.1, help='Min Epsilon for Exploration')
-    parser.add_argument('--max_eps', type=float, default=0.9, help='Max. Epislon for Exploration')
+    parser.add_argument('--max_eps', type=float, default=0.9, help='Max. Epsilon for Exploration')
     parser.add_argument('--total_episodes', type=int, default=20000, help='Total Number of episodes for training')
     parser.add_argument('--eval_episodes', type=int, default=5, help='Number of episodes for evaluation/interval')
     parser.add_argument('--train_interval', type=int, default=100, help='No. of Episodes per training interval')
@@ -70,7 +70,8 @@ if __name__ == '__main__':
     hra_model = DRModel(state.size, actions, reward_types)
     hra_solver = HRA(env_fn(), hra_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
                      args.max_eps, args.total_episodes, args.episode_max_steps)
-    solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
+    # solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
+    solvers = [dr_dqn_solver, dr_dsarsa_solver, hra_solver]
 
     # Fire it up!
     monitor.run(env_fn(), solvers, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
