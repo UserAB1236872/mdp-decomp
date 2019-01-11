@@ -18,10 +18,11 @@ def test(env, solver, eps, eps_max_steps, render=False):
                                              np.concatenate((np.array(sorted(env.reward_types)).reshape(4, 1),
                                                              np.round(q_values, 2)),
                                                             axis=1)))
-                print('greedy action:{},\n Q-Values:{}\n Decomposed q_values: \n{}\n\n'.format(action,
+                print('greedy action:{},\n Q-Values:{}\n Decomposed q_values: \n{}'.format(action,
                                                                                            np.round(q_values.sum(0), 2),
                                                                                            formated_q))
             state, reward, done, info = env.step(action)
+            # print('Reward: {} \n Reward Decompositon: {}\n\n'.format(reward,info['reward_decomposition']))
             ep_reward += reward
             ep_steps += 1
             done = done if ep_steps <= eps_max_steps else True
@@ -78,9 +79,9 @@ def run(env, solvers, runs, max_eps, eval_eps, eps_max_steps, interval, result_p
 
 def eval(env, solvers, eval_eps, eps_max_steps, result_path, render=False):
     info = {'test': {type(solver).__name__: [] for solver in solvers}}
-    env.seed(0)
     # evaluate each solver
     for solver in solvers:
+        env.seed(0)
         solver_name = type(solver).__name__
         solver.restore(os.path.join(result_path, solver_name + '.p'))
         perf = test(env, solver, eval_eps, eps_max_steps, render)

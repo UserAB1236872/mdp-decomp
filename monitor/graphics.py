@@ -8,6 +8,7 @@ from bokeh.models import Legend, LegendItem, HoverTool
 from bokeh.layouts import row
 
 
+# Todo: refactor
 def plot(perf_data, run_mean_data, file_path):
     plotting.output_file(file_path)
 

@@ -1,33 +1,20 @@
-import numpy as np
 import torch
-import random
-from .utils import _LinearDecay, ReplayMemory, Transition
-from torch.optim import Adam
+from .utils import ReplayMemory, Transition
 from torch.nn import MSELoss
 from torch.autograd import Variable
+from ._base import _BaseDeepLearner
 
 
-class HRA:
+class HRA(_BaseDeepLearner):
     """ Hybrid Reward Architecture
         Reference: https://arxiv.org/pdf/1706.04208.pdf
     """
 
-    def __init__(self, env, model, lr, discount, mem_len, batch_size, min_eps, max_eps, total_episodes, eps_max_steps):
+    def __init__(self, env, model, lr, discount, mem_len, batch_size, min_eps, max_eps, total_episodes):
+        super().__init__(model, env, lr, discount, min_eps, max_eps, total_episodes)
 
-        self.env = env
-        self.actions = env.action_space.n
-        self.reward_types = len(env.reward_types)
-        self.lr = lr
-        self.discount = discount
-        self.eps_max_steps = eps_max_steps
-        self.linear_decay = _LinearDecay(min_eps, max_eps, total_episodes)
-
-        self.model = model
-        self.target_model = model
-        self.optimizer = Adam(self.model.parameters(), lr=lr)
-
-        self.memory = ReplayMemory(mem_len)
         self.batch_size = batch_size
+        self.memory = ReplayMemory(mem_len)
 
     def update(self, state, action, next_state, reward, done):
         self.memory.push(state, action, next_state, reward, done)
@@ -45,7 +32,7 @@ class HRA:
 
             # calculate loss for each reward type
             loss = 0
-            for rt in range(self.reward_types):
+            for rt, _ in enumerate(self.reward_types):
                 state = Variable(state_batch.data.clone(), requires_grad=True)
                 predicted_q = self.model(state, rt).gather(1, action_batch)
                 reward = reward_batch[:, rt].unsqueeze(1)
@@ -60,12 +47,6 @@ class HRA:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
             self.optimizer.step()
 
-    def _select_action(self, state):
-        if self.linear_decay.eps > random.random():
-            return random.choice(range(self.actions))
-        else:
-            return self.act(state)
-
     def train(self, episodes):
         for ep in range(episodes):
             done = False
@@ -73,35 +54,8 @@ class HRA:
             while not done:
                 action = self._select_action(state)
                 next_state, _, done, info = self.env.step(action)
-                reward = [info['reward_decomposition'][k] for k in sorted(info['reward_decomposition'].keys())]
+                reward = [info['reward_decomposition'][rt] for rt in self.reward_types]
                 self.update(state, action, next_state, reward, done)
                 state = next_state
 
             self.linear_decay.update()
-
-    def _select_action(self, state):
-        if self.linear_decay.eps > random.random():
-            return random.choice(range(self.actions))
-        else:
-            return self.act(state)
-
-    def act(self, state,debug=False):
-        """ returns greedy action"""
-        state = torch.FloatTensor(state).unsqueeze(0)
-        q_values = None
-        for rt in range(self.reward_types):
-            rt_q_value = self.model(state, rt)
-            q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
-        action = int(q_values.sum(0).max(0)[1].data.numpy())
-
-        if not debug:
-            return action
-        else:
-            return action, q_values.data.numpy()
-
-
-    def save(self, path):
-        torch.save(self.model.state_dict(), path)
-
-    def restore(self, path):
-        self.model.load_state_dict(torch.load(path))

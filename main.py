@@ -37,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_interval', type=int, default=100, help='No. of Episodes per training interval')
     parser.add_argument('--runs', type=int, default=1, help='Experiment Repetition Count')
     parser.add_argument('--discount', type=float, default=0.9, help=' Discount')
-    parser.add_argument('--mem_len', type=float, default=10000, help=' Size of Experiance Replay Memory')
+    parser.add_argument('--mem_len', type=float, default=10000, help=' Size of Experience Replay Memory')
     parser.add_argument('--batch_size', type=float, default=32, help=' Batch size ')
     parser.add_argument('--episode_max_steps', type=float, default=50, help='Maximum Number of steps in an episode')
     parser.add_argument('--train', action='store_true', default=False, help=' Trains all the solvers for given env.')
@@ -58,25 +58,23 @@ if __name__ == '__main__':
     reward_types = len(env.reward_types)
 
     # initialize solvers
-    dr_qlearn = DRQLearn(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes,
-                         args.episode_max_steps)
-    dr_sarsa = DRSarsa(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes,
-                       args.episode_max_steps)
+    dr_qlearn = DRQLearn(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
+    dr_sarsa = DRSarsa(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
 
     dr_dqn_model = DRModel(state.size, actions, reward_types)
     dr_dqn_solver = DRDQN(env_fn(), dr_dqn_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
-                          args.max_eps, args.total_episodes, args.episode_max_steps)
+                          args.max_eps, args.total_episodes)
 
     dr_dsarsa_model = DRModel(state.size, actions, reward_types)
     dr_dsarsa_solver = DRDSarsa(env_fn(), dr_dsarsa_model, args.lr, args.discount, args.mem_len, args.batch_size,
-                                args.min_eps, args.max_eps, args.total_episodes, args.episode_max_steps)
+                                args.min_eps, args.max_eps, args.total_episodes)
 
     hra_model = DRModel(state.size, actions, reward_types)
     hra_solver = HRA(env_fn(), hra_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
-                     args.max_eps, args.total_episodes, args.episode_max_steps)
+                     args.max_eps, args.total_episodes)
+    # solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
+    # solvers = [dr_dqn_solver, dr_dsarsa_solver, hra_solver]
     solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
-    # # solvers = [dr_dqn_solver, dr_dsarsa_solver, hra_solver]
-    # solvers = [dr_dqn_solver]
     # Fire it up!
     # print(env.action_meanings)
     # print(sorted(env.reward_types))
