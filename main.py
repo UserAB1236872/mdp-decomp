@@ -40,9 +40,13 @@ if __name__ == '__main__':
     parser.add_argument('--mem_len', type=float, default=10000, help=' Size of Experiance Replay Memory')
     parser.add_argument('--batch_size', type=float, default=32, help=' Batch size ')
     parser.add_argument('--episode_max_steps', type=float, default=50, help='Maximum Number of steps in an episode')
+    parser.add_argument('--train', action='store_true', default=False, help=' Trains all the solvers for given env.')
+    parser.add_argument('--test', action='store_true', default=False,
+                        help=' Restores and Tests all the solvers for given env.')
 
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
+    args.result_dir = os.path.join(args.result_dir, args.env)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
 
@@ -70,9 +74,15 @@ if __name__ == '__main__':
     hra_model = DRModel(state.size, actions, reward_types)
     hra_solver = HRA(env_fn(), hra_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
                      args.max_eps, args.total_episodes, args.episode_max_steps)
-    # solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
-    solvers = [dr_dqn_solver, dr_dsarsa_solver, hra_solver]
-
+    solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
+    # # solvers = [dr_dqn_solver, dr_dsarsa_solver, hra_solver]
+    # solvers = [dr_dqn_solver]
     # Fire it up!
-    monitor.run(env_fn(), solvers, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
-                args.train_interval, result_path=args.result_dir)
+    # print(env.action_meanings)
+    # print(sorted(env.reward_types))
+    if args.train:
+        monitor.run(env_fn(), solvers, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
+                    args.train_interval, result_path=args.result_dir)
+    if args.test:
+        monitor.eval(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, render=True,
+                     result_path=args.result_dir)

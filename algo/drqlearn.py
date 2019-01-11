@@ -1,6 +1,7 @@
 import numpy as np
 import random
 from .utils import _LinearDecay
+import pickle
 
 
 class DRQLearn:
@@ -9,9 +10,7 @@ class DRQLearn:
     def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes, eps_max_episodes):
         self.env = env
         self.actions = env.action_space.n
-        # Todo: uncomment following
-        # self.reward_types = len(env.reward_types)
-        self.reward_types = 4
+        self.reward_types = len(env.reward_types)
         self.eps_max_episodes = eps_max_episodes
         self.lr = lr
         self.discount = discount
@@ -56,8 +55,19 @@ class DRQLearn:
 
             self.linear_decay.update()
 
-    def act(self, state):
+    def act(self, state, debug=False):
         state = self._ensure_state_exists(state)
         q_values = [sum([self.q_values[state][a][r_i] for r_i in range(self.reward_types)])
                     for a in range(self.actions)]
-        return int(np.argmax(q_values))
+        action = int(np.argmax(q_values))
+
+        if not debug:
+            return action
+        else:
+            return action, self.q_values[state]
+
+    def save(self, path):
+        pickle.dump(self.q_values, open(path, 'wb'))
+
+    def restore(self, path):
+        self.q_values = pickle.load(open(path, 'rb'))

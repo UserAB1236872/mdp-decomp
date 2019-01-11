@@ -16,9 +16,7 @@ class HRA:
 
         self.env = env
         self.actions = env.action_space.n
-        # Todo: uncomment following
-        # self.reward_types = env.reward_types.n
-        self.reward_types = 4
+        self.reward_types = len(env.reward_types)
         self.lr = lr
         self.discount = discount
         self.eps_max_steps = eps_max_steps
@@ -87,11 +85,23 @@ class HRA:
         else:
             return self.act(state)
 
-    def act(self, state):
+    def act(self, state,debug=False):
         """ returns greedy action"""
         state = torch.FloatTensor(state).unsqueeze(0)
         q_values = None
         for rt in range(self.reward_types):
             rt_q_value = self.model(state, rt)
             q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
-        return int(q_values.sum(0).max(0)[1].data.numpy())
+        action = int(q_values.sum(0).max(0)[1].data.numpy())
+
+        if not debug:
+            return action
+        else:
+            return action, q_values.data.numpy()
+
+
+    def save(self, path):
+        torch.save(self.model.state_dict(), path)
+
+    def restore(self, path):
+        self.model.load_state_dict(torch.load(path))
