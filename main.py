@@ -82,5 +82,5 @@ if __name__ == '__main__':
         monitor.run(env_fn(), solvers, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
                     args.train_interval, result_path=args.result_dir)
     if args.test:
-        monitor.eval(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, render=True,
+        monitor.eval(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, render=False,
                      result_path=args.result_dir)

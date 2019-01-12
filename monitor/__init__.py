@@ -3,17 +3,18 @@ import numpy as np
 from .graphics import plot
 
 
-def test(env, solver, eps, eps_max_steps, render=False):
+def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
     result = 0
     for ep in range(eps):
-        ep_reward = 0
-        ep_steps = 0
+        ep_reward, ep_steps = 0, 0
         state = env.reset()
         done = False
         while not done:
-            action, q_values = solver.act(state, debug=True)
             if render:
                 env.render()
+            action, q_values = solver.act(state, debug=True)
+            state, reward, done, info = env.step(action)
+            if verbose:
                 formated_q = np.concatenate((np.array(['*'] + env.action_meanings).reshape(1, 5),
                                              np.concatenate((np.array(sorted(env.reward_types)).reshape(4, 1),
                                                              np.round(q_values, 2)),
@@ -21,8 +22,7 @@ def test(env, solver, eps, eps_max_steps, render=False):
                 print('greedy action:{},\n Q-Values:{}\n Decomposed q_values: \n{}'.format(action,
                                                                                            np.round(q_values.sum(0), 2),
                                                                                            formated_q))
-            state, reward, done, info = env.step(action)
-            # print('Reward: {} \n Reward Decompositon: {}\n\n'.format(reward,info['reward_decomposition']))
+                print('Reward: {} \n Reward Decompositon: {}\n\n'.format(reward, info['reward_decomposition']))
             ep_reward += reward
             ep_steps += 1
             done = done if ep_steps <= eps_max_steps else True
