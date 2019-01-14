@@ -22,7 +22,7 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
                 print('greedy action:{},\n Q-Values:{}\n Decomposed q_values: \n{}'.format(action,
                                                                                            np.round(q_values.sum(0), 2),
                                                                                            formated_q))
-                print('Reward: {} \n Reward Decompositon: {}\n\n'.format(reward, info['reward_decomposition']))
+                print('Reward: {} \n Reward Decomposition: {}\n\n'.format(reward, info['reward_decomposition']))
             ep_reward += reward
             ep_steps += 1
             done = done if ep_steps <= eps_max_steps else True
@@ -30,7 +30,7 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
     return result / eps
 
 
-def run(env, solvers, runs, max_eps, eval_eps, eps_max_steps, interval, result_path):
+def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, result_path):
     """
     :param env_fn: creates an instance of the environment
     :param solvers: list of solvers
@@ -40,16 +40,20 @@ def run(env, solvers, runs, max_eps, eval_eps, eps_max_steps, interval, result_p
     :param result_path: root directory to store results
 
     """
-    info = {'test': {type(solver).__name__: [] for solver in solvers},
-            'test_run_mean': {type(solver).__name__: [] for solver in solvers},
-            'best_test': {type(solver).__name__: -float('inf') for solver in solvers}}
+
+    info = {'test': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'test_run_mean': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'best_test': {type(solver()).__name__: [-float('inf') for _ in range(runs)] for solver in solvers_fn}}
+
     env.seed(0)
     for run in range(runs):
+        # instantiate each solver for the run
+        solvers = [solver() for solver in solvers_fn]
+
         curr_eps = 0
         while curr_eps < max_eps:
 
             # train each solver
-            # Todo: parallel execution
             for solver in solvers:
                 solver.train(episodes=interval)
 
@@ -57,24 +61,29 @@ def run(env, solvers, runs, max_eps, eval_eps, eps_max_steps, interval, result_p
             for solver in solvers:
                 solver_name = type(solver).__name__
                 perf = test(env, solver, eval_eps, eps_max_steps)
-                info['test'][solver_name].append(perf)
-                if len(info['test_run_mean'][solver_name]) == 0:
-                    info['test_run_mean'][solver_name].append(perf)
+                info['test'][solver_name][run].append(perf)
+                if len(info['test_run_mean'][solver_name][run]) == 0:
+                    info['test_run_mean'][solver_name][run].append(perf)
                 else:
-                    n = len(info['test_run_mean'][solver_name])
-                    m = info['test_run_mean'][solver_name][-1]
-                    info['test_run_mean'][solver_name].append(((n * m + perf) / (n + 1)))
+                    n = len(info['test_run_mean'][solver_name][run])
+                    m = info['test_run_mean'][solver_name][run][-1]
+                    info['test_run_mean'][solver_name][run].append(((n * m + perf) / (n + 1)))
 
-                if info['test'][solver_name][-1] >= info['best_test'][solver_name]:
+                if info['test'][solver_name][run][-1] >= info['best_test'][solver_name][run]:
                     solver.save(os.path.join(result_path, solver_name + '.p'))
-                    info['best_test'][solver_name] = info['test'][solver_name][-1]
+                    info['best_test'][solver_name][run] = info['test'][solver_name][run][-1]
 
-            print('{}/{} ==> {}'.format(curr_eps, max_eps,
-                                        [(k, round(info['test_run_mean'][k][-1], 2)) for k in
-                                         sorted(info['test'].keys())]))
+            print('Run {} : {}/{} ==> {}'.format(run, curr_eps, max_eps,
+                                                 [(k, round(info['test_run_mean'][k][run][-1], 2)) for k in
+                                                  sorted(info['test'].keys())]))
             curr_eps += interval
 
-        plot(info['test'], info['test_run_mean'], os.path.join(result_path, 'report.html'))
+        _test_data, _test_run_mean = {}, {}
+        for solver in solvers:
+            solver_name = type(solver).__name__
+            _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
+            _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
+        plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
 
 def eval(env, solvers, eval_eps, eps_max_steps, result_path, render=False):

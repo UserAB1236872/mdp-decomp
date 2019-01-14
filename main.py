@@ -58,29 +58,24 @@ if __name__ == '__main__':
     reward_types = len(env.reward_types)
 
     # initialize solvers
-    dr_qlearn = DRQLearn(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
-    dr_sarsa = DRSarsa(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
+    dr_qlearn_fn = lambda: DRQLearn(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
+    dr_sarsa_fn = lambda: DRSarsa(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
 
-    dr_dqn_model = DRModel(state.size, actions, reward_types)
-    dr_dqn_solver = DRDQN(env_fn(), dr_dqn_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
-                          args.max_eps, args.total_episodes)
+    model_fn = lambda: DRModel(state.size, actions, reward_types)
+    dr_dqn_solver_fn = lambda: DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
+                                     args.min_eps, args.max_eps, args.total_episodes)
 
-    dr_dsarsa_model = DRModel(state.size, actions, reward_types)
-    dr_dsarsa_solver = DRDSarsa(env_fn(), dr_dsarsa_model, args.lr, args.discount, args.mem_len, args.batch_size,
+    dr_dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
+                                           args.batch_size, args.min_eps, args.max_eps, args.total_episodes)
+
+    hra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                 args.min_eps, args.max_eps, args.total_episodes)
+    solvers_fn = [dr_qlearn_fn, dr_sarsa_fn, dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
 
-    hra_model = DRModel(state.size, actions, reward_types)
-    hra_solver = HRA(env_fn(), hra_model, args.lr, args.discount, args.mem_len, args.batch_size, args.min_eps,
-                     args.max_eps, args.total_episodes)
-    # solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
-    # solvers = [dr_dqn_solver, dr_dsarsa_solver, hra_solver]
-    solvers = [dr_qlearn, dr_sarsa, dr_dqn_solver, dr_dsarsa_solver, hra_solver]
     # Fire it up!
-    # print(env.action_meanings)
-    # print(sorted(env.reward_types))
     if args.train:
-        monitor.run(env_fn(), solvers, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
+        monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
                     args.train_interval, result_path=args.result_dir)
     if args.test:
-        monitor.eval(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, render=False,
+        monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
                      result_path=args.result_dir)
