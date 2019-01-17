@@ -1,6 +1,7 @@
 import os
+import json
 import numpy as np
-from .graphics import plot
+from .graphics import plot, msx_plot
 
 
 def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
@@ -98,3 +99,36 @@ def eval(env, solvers, eval_eps, eps_max_steps, result_path, render=False):
 
     print([(s, np.average(info['test'][s])) for s in info['test']])
     return info
+
+
+def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path):
+
+    data = {'msx': [], 'actions': env.action_meanings, 'reward_types': sorted(env.reward_types)}
+    optimal_solver_name = type(optimal_solver).__name__
+    solver_names = []
+    for solver in solvers + [optimal_solver]:
+        solver_name = type(solver).__name__
+        solver.restore(os.path.join(result_path, solver_name + '.p'))
+        solver_names.append(solver_name)
+
+    env.seed(0)
+    steps, done = 0, False
+    state = env.reset()
+    while not done:
+        action, q_values, msx = optimal_solver.act(state, debug=True)
+        state_info = {'state': state.tolist(),
+                      'solvers': {optimal_solver_name: {'msx': msx, 'q_values': q_values, 'action': action}}}
+        for solver in solvers:
+            solver_name = type(solver).__name__
+            _action, _q_values, _msx = solver.act(state, debug=True)
+            state_info['solvers'][solver_name] = {'msx': _msx, 'q_values': _q_values, 'action': _action}
+
+        state, reward, done, _ = env.step(action)
+        done = done or (steps >= eps_max_steps)
+        steps += 1
+
+        data['msx'].append(state_info)
+    msx_plot(data['msx'], solver_names,sorted(env.reward_types), env.action_meanings, optimal_solver_name)
+    # with open('data.json', 'w') as fp:
+    #     json.dump(data, fp)
+    return data

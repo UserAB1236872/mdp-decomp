@@ -33,6 +33,17 @@ class _BaseLearner:
         else:
             return self.act(state)
 
+    def _msx(self, q_values):
+        msx = {}
+        for a in range(self.actions):
+            msx[a] = {}
+            for a_dash in range(self.actions):
+                if a != a_dash:
+                    msx[a][a_dash] = {}
+                    for rt_i, rt in enumerate(self.reward_types):
+                        msx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
+        return msx
+
     def train(self, episodes):
         """ trains the algorithm for given episodes"""
         raise NotImplementedError
@@ -69,8 +80,8 @@ class _BaseTableLearner(_BaseLearner):
         action_q_values = [sum([self.q_values[state][r_i][a] for r_i, _ in enumerate(self.reward_types)])
                            for a in range(self.actions)]
         action = int(np.argmax(action_q_values))
-
-        return action if not debug else (action, self.q_values[state])
+        q_values = [self.q_values[state][r_i] for r_i in range(len(self.reward_types))]
+        return action if not debug else (action, q_values, self._msx(q_values))
 
     def save(self, path):
         pickle.dump(self.q_values, open(path, 'wb'))
@@ -95,7 +106,8 @@ class _BaseDeepLearner(_BaseLearner):
             rt_q_value = self.model(state, rt)
             q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
         action = int(q_values.sum(0).max(0)[1].data.numpy())
-        return action if not debug else (action, q_values.data.numpy())
+        q_values = q_values.data.numpy().tolist()
+        return action if not debug else (action, q_values, self._msx(q_values))
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)

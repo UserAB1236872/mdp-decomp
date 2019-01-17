@@ -43,6 +43,8 @@ if __name__ == '__main__':
     parser.add_argument('--train', action='store_true', default=False, help=' Trains all the solvers for given env.')
     parser.add_argument('--test', action='store_true', default=False,
                         help=' Restores and Tests all the solvers for given env.')
+    parser.add_argument('--eval_msx', action='store_true', default=False,
+                        help=' Restores the solvers and Calculates MSX for state in given env.')
 
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
@@ -79,3 +81,8 @@ if __name__ == '__main__':
     if args.test:
         monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
                      result_path=args.result_dir)
+    if args.eval_msx:
+        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn()]
+        optimal_solver = dr_dqn_solver_fn()
+        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.result_dir)
+

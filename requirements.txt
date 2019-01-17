@@ -1,3 +1,7 @@
 numpy==1.15.4
 torch==1.0.0
 bokeh==1.0.1
+dash==0.35.1  # The core dash backend
+dash-html-components==0.13.4  # HTML components
+dash-core-components==0.42.1  # Supercharged components
+dash-table==3.1.11  # Interactive DataTable component (new!)
