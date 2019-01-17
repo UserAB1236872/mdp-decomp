@@ -101,7 +101,7 @@ def eval(env, solvers, eval_eps, eps_max_steps, result_path, render=False):
     return info
 
 
-def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path):
+def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path,port,host):
 
     data = {'msx': [], 'actions': env.action_meanings, 'reward_types': sorted(env.reward_types)}
     optimal_solver_name = type(optimal_solver).__name__
@@ -116,7 +116,7 @@ def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path):
     state = env.reset()
     while not done:
         action, q_values, msx = optimal_solver.act(state, debug=True)
-        state_info = {'state': state.tolist(),
+        state_info = {'state': env.render(),
                       'solvers': {optimal_solver_name: {'msx': msx, 'q_values': q_values, 'action': action}}}
         for solver in solvers:
             solver_name = type(solver).__name__
@@ -128,7 +128,5 @@ def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path):
         steps += 1
 
         data['msx'].append(state_info)
-    msx_plot(data['msx'], solver_names,sorted(env.reward_types), env.action_meanings, optimal_solver_name)
-    # with open('data.json', 'w') as fp:
-    #     json.dump(data, fp)
+    msx_plot(data['msx'], solver_names,sorted(env.reward_types), env.action_meanings, optimal_solver_name,port,host)
     return data

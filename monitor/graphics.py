@@ -71,19 +71,18 @@ def plot(perf_data, run_mean_data, file_path):
     plotting.save(p)
 
 
-def msx_plot(data, solvers, reward_types, actions, optimal_solver):
+def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
     import dash
     import dash_core_components as dcc
     import dash_html_components as html
     from dash.dependencies import Input, Output, State
 
-
-
-    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css','#game_area>div : {margin:10px 0px}']
+    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',
+                            'https://codepen.io/koulanurag/pen/maYYKN.css']
     app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
     graph_style = {'width': '20%', 'display': 'inline-block'}
-    game_area_style= {'width':'20%','float':'left','margin':'25% auto'}
-    graph_area_style= {'width':'80%','float':'right'}
+    game_area_style = {'width': '20%', 'float': 'left', 'margin': '25% auto'}
+    graph_area_style = {'width': '80%', 'float': 'right'}
 
     action_options = []
     for i, a in enumerate(actions):
@@ -99,7 +98,7 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver):
     state_slider = dcc.Slider(
         id='state_selector',
         min=0,
-        max=len(data)-1,
+        max=len(data) - 1,
         step=1,
         value=0,
         marks={i: str(i).format(i) for i in range(len(data))},
@@ -120,15 +119,20 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver):
         q_values_graphs.append(q_graph)
         msx_graphs.append(m_graph)
 
+    q_value_wrapper = html.Div(children=[html.Div(children='Decomposed Q-values', className='title'),
+                                         html.Div(className='graph_group',children=q_values_graphs)])
+    msx_wrapper = html.Div(children=[html.Div(children='Explanations', className='title'),
+                                         html.Div(className='graph_group',children=msx_graphs)])
+
     # create the layout
-    action_wrap = html.Div(className='action_area',children=["Action Pair:",action_pair_selector])
-    state_slider_wrap = html.Div(className='trajectory',children=["Trajectory:",state_slider])
-    game_area = html.Div(id='game_area',style=game_area_style,
+    action_wrap = html.Div(className='action_area', children=["Action Pair:", action_pair_selector])
+    state_slider_wrap = html.Div(className='trajectory', children=["Trajectory:", state_slider])
+    game_area = html.Div(id='game_area', style=game_area_style,
                          children=[html.Div(id='state', children=''),
                                    action_wrap,
                                    state_slider_wrap])
-    graph_area = html.Div(id='graph_area',style=graph_area_style,
-                          children=q_values_graphs + msx_graphs)
+    graph_area = html.Div(id='graph_area', style=graph_area_style,
+                          children=[q_value_wrapper ,msx_wrapper])
     children = [game_area, graph_area]
     app.layout = html.Div(children=children)
 
@@ -137,7 +141,8 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver):
         Output(component_id='state', component_property='children'),
         [Input(component_id='state_selector', component_property='value')])
     def update_state(i):
-        return data[i]['state']
+        html_state = [html.Span(children=' '.join([str(r) for r in row])) for row in data[i]['state']]
+        return html_state
 
     for solver in solvers:
 
@@ -181,4 +186,4 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver):
                 }
             }
             return figure
-    app.run_server(debug=True)
+    app.run_server(debug=True, port=port, host=host)

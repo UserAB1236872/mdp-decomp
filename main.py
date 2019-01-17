@@ -45,6 +45,8 @@ if __name__ == '__main__':
                         help=' Restores and Tests all the solvers for given env.')
     parser.add_argument('--eval_msx', action='store_true', default=False,
                         help=' Restores the solvers and Calculates MSX for state in given env.')
+    parser.add_argument('--use_public_ip', action='store_true', default=False,
+                        help='Loads Plottly on Public server rather than localhost')
 
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
@@ -84,5 +86,6 @@ if __name__ == '__main__':
     if args.eval_msx:
         solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn()]
         optimal_solver = dr_dqn_solver_fn()
-        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.result_dir)
+        host = '127.0.0.1' if not args.use_public_ip else '0.0.0.0'
+        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.result_dir,port=8051,host=host)
 
