@@ -83,8 +83,8 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
     app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
     # graph_style = {'width': '20%', 'display': 'inline-block'}
     graph_style = {}
-    game_area_style = {'width': '20%', 'float': 'left', 'margin': '25% auto'}
-    graph_area_style = {'width': '80%', 'float': 'right'}
+    game_area_style = {'width': '300px', 'float': 'left','position':'fixed'}
+    graph_area_style = {'width': str(500*len(solvers))+'px', 'float': 'right','position':'absolute'}
 
     reward_colors = {rt: cl.scales['10']['qual']['Set3'][i] for i, rt in enumerate(reward_types)}
     action_options = []
@@ -130,19 +130,21 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
         msx_graphs.append(html.Div(className='graph_box', children=[m_graph, action_pair_selector]))
 
     q_value_wrapper = html.Section(children=[html.Div(children='Decomposed Q-values', className='title'),
-                                             html.Div(className='graph_group', children=q_values_graphs)])
+                                             html.Div(className='graph_group', children=q_values_graphs),
+                                             html.Div(className='clear')])
     msx_wrapper = html.Section(children=[html.Div(children='Explanations', className='title'),
-                                         html.Div(className='graph_group', children=msx_graphs)])
+                                         html.Div(className='graph_group', children=msx_graphs),
+                                         html.Div(className='clear')])
 
     # create the layout
     # action_wrap = html.Div(className='action_area', children=["Action Pair:", action_pair_selector])
     state_slider_wrap = html.Div(className='trajectory', children=["Trajectory:", state_slider])
 
     game_area = html.Div(id='game_area', style=game_area_style,
-                         children=[html.Div(id='state', children=''),
+                         children=[html.Div(children=[html.Div(id='state', children=''),
                                    msx_checkbox,
                                    state_slider_wrap
-                                   ])
+                                   ])])
     graph_area = html.Div(id='graph_area', style=graph_area_style,
                           children=[q_value_wrapper, msx_wrapper])
     # game_control = html.Div(children=[state_slider_wrap, msx_checkbox], className='game_control')
