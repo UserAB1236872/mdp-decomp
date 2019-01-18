@@ -87,5 +87,5 @@ if __name__ == '__main__':
         solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn()]
         optimal_solver = dr_dqn_solver_fn()
         host = '127.0.0.1' if not args.use_public_ip else '0.0.0.0'
-        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.result_dir,port=8051,host=host)
-
+        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.result_dir,
+                         port=8051, host=host)

@@ -6,6 +6,7 @@ from bokeh.colors import RGB
 from bokeh.palettes import Category10
 from bokeh.models import Legend, LegendItem, HoverTool
 from bokeh.layouts import row
+import colorlover as cl
 
 
 # Todo: refactor
@@ -80,21 +81,17 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
     external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',
                             'https://codepen.io/koulanurag/pen/maYYKN.css']
     app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-    graph_style = {'width': '20%', 'display': 'inline-block'}
+    # graph_style = {'width': '20%', 'display': 'inline-block'}
+    graph_style = {}
     game_area_style = {'width': '20%', 'float': 'left', 'margin': '25% auto'}
     graph_area_style = {'width': '80%', 'float': 'right'}
 
+    reward_colors = {rt: cl.scales['10']['qual']['Set3'][i] for i, rt in enumerate(reward_types)}
     action_options = []
     for i, a in enumerate(actions):
         action_options += [{'label': a + ',' + a_dash, 'value': str(i) + '_' + str(j)} for j, a_dash in
                            enumerate(actions) if
                            a != a_dash]
-    action_pair_selector = dcc.Dropdown(
-        id='action_pair_selector',
-        options=action_options,
-        value=action_options[0]['value']
-    )
-
     state_slider = dcc.Slider(
         id='state_selector',
         min=0,
@@ -103,36 +100,52 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
         value=0,
         marks={i: str(i).format(i) for i in range(len(data))},
     )
+    msx_checkbox = dcc.Checklist(
+        id='msx_checkbox',
+        options=[
+            {'label': 'Show MSX', 'value': 'MSX'}
+        ],
+        values=[]
+    )
 
     q_values_graphs, msx_graphs = [], []
     for solver in solvers:
         q_graph = dcc.Graph(
             id='q-value-' + solver,
-            style=graph_style,
-            className=solver
+            className=solver,
+            style=graph_style
         )
         m_graph = dcc.Graph(
             id='msx-' + solver,
-            style=graph_style,
-            className=solver
+            className=solver,
+            style=graph_style
         )
-        q_values_graphs.append(q_graph)
-        msx_graphs.append(m_graph)
+        action_pair_selector = dcc.Dropdown(
+            id='action_pair_selector-' + solver,
+            options=action_options,
+            value=action_options[0]['value'],
+            className='action_pair'
+        )
+        q_values_graphs.append(html.Div(className='graph_box', children=[q_graph]))
+        msx_graphs.append(html.Div(className='graph_box', children=[m_graph, action_pair_selector]))
 
-    q_value_wrapper = html.Div(children=[html.Div(children='Decomposed Q-values', className='title'),
-                                         html.Div(className='graph_group',children=q_values_graphs)])
-    msx_wrapper = html.Div(children=[html.Div(children='Explanations', className='title'),
-                                         html.Div(className='graph_group',children=msx_graphs)])
+    q_value_wrapper = html.Section(children=[html.Div(children='Decomposed Q-values', className='title'),
+                                             html.Div(className='graph_group', children=q_values_graphs)])
+    msx_wrapper = html.Section(children=[html.Div(children='Explanations', className='title'),
+                                         html.Div(className='graph_group', children=msx_graphs)])
 
     # create the layout
-    action_wrap = html.Div(className='action_area', children=["Action Pair:", action_pair_selector])
+    # action_wrap = html.Div(className='action_area', children=["Action Pair:", action_pair_selector])
     state_slider_wrap = html.Div(className='trajectory', children=["Trajectory:", state_slider])
+
     game_area = html.Div(id='game_area', style=game_area_style,
                          children=[html.Div(id='state', children=''),
-                                   action_wrap,
-                                   state_slider_wrap])
+                                   msx_checkbox,
+                                   state_slider_wrap
+                                   ])
     graph_area = html.Div(id='graph_area', style=graph_area_style,
-                          children=[q_value_wrapper ,msx_wrapper])
+                          children=[q_value_wrapper, msx_wrapper])
+    # game_control = html.Div(children=[state_slider_wrap, msx_checkbox], className='game_control')
     children = [game_area, graph_area]
     app.layout = html.Div(children=children)
 
@@ -157,7 +170,9 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
                                 'y': [data[i]['solvers'][solver]['q_values'][rt_i][a] for a in
                                       range(len(actions))],
                                 'type': 'bar',
-                                'name': rt})
+                                'name': rt,
+                                'marker': {'color': reward_colors[rt]}
+                                })
             figure = {
                 'data': rt_data,
                 'layout': {
@@ -167,23 +182,45 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
             return figure
 
         @app.callback(
+            Output(component_id='action_pair_selector-' + solver, component_property='value'),
+            [Input(component_id='state_selector', component_property='value')],
+            [State(component_id='q-value-' + solver, component_property='className')])
+        def update_action_pair(state, solver):
+            greedy_act = data[state]['solvers'][solver]['action']
+            return str(greedy_act) + '_' + str([x for x in range(len(actions)) if x != greedy_act][0])
+
+        @app.callback(
             Output(component_id='msx-' + solver, component_property='figure'),
-            [Input(component_id='state_selector', component_property='value'),
-             Input(component_id='action_pair_selector', component_property='value')],
-            [State(component_id='msx-' + solver, component_property='className')])
-        def update_msx_graphs(state, action_pair, solver):
+            [Input(component_id='action_pair_selector-' + solver, component_property='value'),
+             Input(component_id='msx_checkbox', component_property='values')],
+            [State(component_id='state_selector', component_property='value'),
+             State(component_id='msx-' + solver, component_property='className')])
+        def update_msx_graphs(action_pair, msx_checkbox_val, state, solver):
             first_action, sec_action = [int(a) for a in action_pair.split('_')]
+            use_msx = len(msx_checkbox_val) > 0
             rt_data = []
             for rt_i, rt in enumerate(reward_types):
                 rt_data.append({'x': [''],
                                 'y': [round(data[state]['solvers'][solver]['msx'][first_action][sec_action][rt], 2)],
                                 'type': 'bar',
-                                'name': rt})
+                                'name': rt,
+                                'marker': {'color': reward_colors[rt]}})
+            rt_data.sort(key=lambda x: x['y'][0], reverse=True)
+            if use_msx:
+                for i in range(len(rt_data) - 1):
+                    left = sum(rd['y'][0] for rd in rt_data[: i + 1])
+                    right = sum(rd['y'][0] for rd in rt_data[i + 1:])
+                    if left > right:
+                        rt_data = rt_data[: i + 1]
+                        break
+
             figure = {
                 'data': rt_data,
                 'layout': {
-                    'title': solver
+                    'title': solver,
+                    'showlegend': True
                 }
             }
             return figure
-    app.run_server(debug=True, port=port, host=host)
+
+    app.run_server(debug=False, port=port, host=host)
