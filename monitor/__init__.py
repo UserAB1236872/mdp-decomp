@@ -1,7 +1,8 @@
 import os
-import json
 import numpy as np
-from .graphics import plot, msx_plot
+from .graphics import plot
+from .graphics import visualize_results as vr
+import pickle
 
 
 def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
@@ -84,6 +85,8 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             solver_name = type(solver).__name__
             _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
             _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
+        _data = {'data': _test_data, 'run_mean': _test_run_mean}
+        pickle.dump(_data, open(os.path.join(result_path, 'train_data.p'), 'wb'))
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
 
@@ -101,8 +104,7 @@ def eval(env, solvers, eval_eps, eps_max_steps, result_path, render=False):
     return info
 
 
-def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path,port,host):
-
+def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path):
     data = {'msx': [], 'actions': env.action_meanings, 'reward_types': sorted(env.reward_types)}
     optimal_solver_name = type(optimal_solver).__name__
     solver_names = []
@@ -116,7 +118,7 @@ def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path,port,host)
     state = env.reset()
     while not done:
         action, q_values, msx = optimal_solver.act(state, debug=True)
-        state_info = {'state': env.render(),
+        state_info = {'state': env.render(mode='print'),
                       'solvers': {optimal_solver_name: {'msx': msx, 'q_values': q_values, 'action': action}}}
         for solver in solvers:
             solver_name = type(solver).__name__
@@ -128,5 +130,11 @@ def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path,port,host)
         steps += 1
 
         data['msx'].append(state_info)
-    msx_plot(data['msx'], solver_names,sorted(env.reward_types), env.action_meanings, optimal_solver_name,port,host)
-    return data
+
+    _data = {'data': data['msx'], 'solvers': solver_names, 'reward_types': sorted(env.reward_types),
+             'actions': env.action_meanings, 'optimal_solver': optimal_solver_name}
+    pickle.dump(_data, open(os.path.join(result_path, 'x_data.p'), 'wb'))
+
+
+def visualize_results(result_path, host, port):
+    return vr(result_path, host, port)

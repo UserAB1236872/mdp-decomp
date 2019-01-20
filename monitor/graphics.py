@@ -1,15 +1,20 @@
 """
 Graphical Representation of Data
 """
+import os
 from bokeh import plotting
 from bokeh.colors import RGB
 from bokeh.palettes import Category10
 from bokeh.models import Legend, LegendItem, HoverTool
 from bokeh.layouts import row
 import colorlover as cl
+import dash
+import dash_core_components as dcc
+import dash_html_components as html
+from dash.dependencies import Input, Output, State
+import pickle
 
 
-# Todo: refactor
 def plot(perf_data, run_mean_data, file_path):
     plotting.output_file(file_path)
 
@@ -72,19 +77,11 @@ def plot(perf_data, run_mean_data, file_path):
     plotting.save(p)
 
 
-def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
-    import dash
-    import dash_core_components as dcc
-    import dash_html_components as html
-    from dash.dependencies import Input, Output, State
-
-    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',
-                            'https://codepen.io/koulanurag/pen/maYYKN.css']
-    app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+def x_layout(app, data, solvers, reward_types, actions, optimal_solver, prefix):
     # graph_style = {'width': '20%', 'display': 'inline-block'}
     graph_style = {}
-    game_area_style = {'width': '300px', 'float': 'left','position':'fixed'}
-    graph_area_style = {'width': str(500*len(solvers))+'px', 'float': 'right','position':'absolute'}
+    game_area_style = {'width': '300px', 'float': 'left', 'position': 'fixed'}
+    graph_area_style = {'width': str(500 * len(solvers)) + 'px', 'float': 'right', 'position': 'absolute'}
 
     reward_colors = {rt: cl.scales['10']['qual']['Set3'][i] for i, rt in enumerate(reward_types)}
     action_options = []
@@ -93,7 +90,8 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
                            enumerate(actions) if
                            a != a_dash]
     state_slider = dcc.Slider(
-        id='state_selector',
+        className='state_selector',
+        id=prefix + 'state_selector',
         min=0,
         max=len(data) - 1,
         step=1,
@@ -101,7 +99,7 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
         marks={i: str(i).format(i) for i in range(len(data))},
     )
     msx_checkbox = dcc.Checklist(
-        id='msx_checkbox',
+        id=prefix + 'msx_checkbox',
         options=[
             {'label': 'Show MSX', 'value': 'MSX'}
         ],
@@ -111,17 +109,17 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
     q_values_graphs, msx_graphs = [], []
     for solver in solvers:
         q_graph = dcc.Graph(
-            id='q-value-' + solver,
+            id=prefix + 'q-value-' + solver,
             className=solver,
             style=graph_style
         )
         m_graph = dcc.Graph(
-            id='msx-' + solver,
+            id=prefix + 'msx-' + solver,
             className=solver,
             style=graph_style
         )
         action_pair_selector = dcc.Dropdown(
-            id='action_pair_selector-' + solver,
+            id=prefix + 'action_pair_selector-' + solver,
             options=action_options,
             value=action_options[0]['value'],
             className='action_pair'
@@ -140,31 +138,31 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
     # action_wrap = html.Div(className='action_area', children=["Action Pair:", action_pair_selector])
     state_slider_wrap = html.Div(className='trajectory', children=["Trajectory:", state_slider])
 
-    game_area = html.Div(id='game_area', style=game_area_style,
-                         children=[html.Div(children=[html.Div(id='state', children=''),
-                                   msx_checkbox,
-                                   state_slider_wrap
-                                   ])])
-    graph_area = html.Div(id='graph_area', style=graph_area_style,
+    game_area = html.Div(className='game_area', style=game_area_style,
+                         children=[html.Div(children=[html.Div(id=prefix + 'state', children='', className='state'),
+                                                      msx_checkbox,
+                                                      state_slider_wrap
+                                                      ])])
+    graph_area = html.Div(className='graph_area', style=graph_area_style,
                           children=[q_value_wrapper, msx_wrapper])
     # game_control = html.Div(children=[state_slider_wrap, msx_checkbox], className='game_control')
     children = [game_area, graph_area]
-    app.layout = html.Div(children=children)
+    layout = html.Div(children=children)
 
     # create callbacks
     @app.callback(
-        Output(component_id='state', component_property='children'),
-        [Input(component_id='state_selector', component_property='value')])
+        Output(component_id=prefix + 'state', component_property='children'),
+        [Input(component_id=prefix + 'state_selector', component_property='value')])
     def update_state(i):
-        html_state = [html.Span(children=' '.join([str(r) for r in row])) for row in data[i]['state']]
+        html_state = [html.Span(children=row) for row in data[i]['state'].split('\n')]
         return html_state
 
     for solver in solvers:
 
         @app.callback(
-            Output(component_id='q-value-' + solver, component_property='figure'),
-            [Input(component_id='state_selector', component_property='value')],
-            [State(component_id='q-value-' + solver, component_property='className')])
+            Output(component_id=prefix + 'q-value-' + solver, component_property='figure'),
+            [Input(component_id=prefix + 'state_selector', component_property='value')],
+            [State(component_id=prefix + 'q-value-' + solver, component_property='className')])
         def update_q_graphs(i, solver):
             rt_data = []
             for rt_i, rt in enumerate(reward_types):
@@ -184,19 +182,19 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
             return figure
 
         @app.callback(
-            Output(component_id='action_pair_selector-' + solver, component_property='value'),
-            [Input(component_id='state_selector', component_property='value')],
-            [State(component_id='q-value-' + solver, component_property='className')])
+            Output(component_id=prefix + 'action_pair_selector-' + solver, component_property='value'),
+            [Input(component_id=prefix + 'state_selector', component_property='value')],
+            [State(component_id=prefix + 'q-value-' + solver, component_property='className')])
         def update_action_pair(state, solver):
             greedy_act = data[state]['solvers'][solver]['action']
             return str(greedy_act) + '_' + str([x for x in range(len(actions)) if x != greedy_act][0])
 
         @app.callback(
-            Output(component_id='msx-' + solver, component_property='figure'),
-            [Input(component_id='action_pair_selector-' + solver, component_property='value'),
-             Input(component_id='msx_checkbox', component_property='values')],
-            [State(component_id='state_selector', component_property='value'),
-             State(component_id='msx-' + solver, component_property='className')])
+            Output(component_id=prefix + 'msx-' + solver, component_property='figure'),
+            [Input(component_id=prefix + 'action_pair_selector-' + solver, component_property='value'),
+             Input(component_id=prefix + 'msx_checkbox', component_property='values')],
+            [State(component_id=prefix + 'state_selector', component_property='value'),
+             State(component_id=prefix + 'msx-' + solver, component_property='className')])
         def update_msx_graphs(action_pair, msx_checkbox_val, state, solver):
             first_action, sec_action = [int(a) for a in action_pair.split('_')]
             use_msx = len(msx_checkbox_val) > 0
@@ -224,5 +222,55 @@ def msx_plot(data, solvers, reward_types, actions, optimal_solver, port, host):
                 }
             }
             return figure
+
+    return layout
+
+
+def visualize_results(result_path, host, port):
+    external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css',
+                            'https://codepen.io/koulanurag/pen/maYYKN.css']
+    app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+    app.config.suppress_callback_exceptions = True
+
+    envs = [(o, os.path.join(result_path, o)) for o in os.listdir(result_path)
+            if os.path.isdir(os.path.join(result_path, o))]
+    index_children = []
+    layouts = {}
+    for env, env_path in envs:
+        layouts[env] = {}
+        x_path = os.path.join(env_path, 'x_data.p')
+        train_path = os.path.join(env_path, 'train_data.p')
+
+        if os.path.exists(x_path):
+            prefix = env.lower() + '_explanations'
+            _path = '/' + prefix
+            x_page = dcc.Link(env + ': Explanations', href=_path)
+            x_data = pickle.load(open(x_path, 'rb'))
+            layouts[_path] = x_layout(app, x_data['data'], x_data['solvers'], x_data['reward_types'],
+                                      x_data['actions'], x_data['optimal_solver'], prefix)
+            index_children.append(x_page)
+            index_children.append(html.Br())
+
+        # if os.path.exists(train_path):
+        #     x_data = pickle.load(open(train_path, 'rb'))
+        #     layouts[env]['train'] = x_layout(x_data['data'], x_data['solvers'], x_data['reward_types'],
+        #                                      x_data['actions'], x_data['optimal_solver'])
+        #     train_page = dcc.Link(env + ': Explanations', href='/' + env.lower() + '_explanations')
+        #     index_children.append(train_page)
+        #     index_children.append(html.Br())
+
+    app.layout = html.Div([
+        dcc.Location(id='url', refresh=False),
+        html.Div(id='page-content')
+    ])
+
+    index_page = html.Div(children=index_children)
+
+    @app.callback(Output('page-content', 'children'),
+                  [Input('url', 'pathname')])
+    def display_page(pathname):
+        if pathname in layouts:
+            return layouts[pathname]
+        return index_page
 
     app.run_server(debug=False, port=port, host=host)

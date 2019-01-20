@@ -47,10 +47,16 @@ if __name__ == '__main__':
                         help=' Restores the solvers and Calculates MSX for state in given env.')
     parser.add_argument('--use_public_ip', action='store_true', default=False,
                         help='Loads Plottly on Public server rather than localhost')
+    parser.add_argument('--host', default='127.0.0.1',
+                        help='IP address for hosting the data (default: localhost)')
+    parser.add_argument('--port', default='8051',
+                        help='hosting port (default:8051)')
+    parser.add_argument('--visualize_results', action='store_true', default=False,
+                        help=' ')
 
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
-    args.result_dir = os.path.join(args.result_dir, args.env)
+    args.env_result_dir = os.path.join(args.result_dir, args.env)
     if not os.path.exists(args.result_dir):
         os.makedirs(args.result_dir)
 
@@ -79,13 +85,13 @@ if __name__ == '__main__':
     # Fire it up!
     if args.train:
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
-                    args.train_interval, result_path=args.result_dir)
+                    args.train_interval, result_path=args.env_result_dir)
     if args.test:
         monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
-                     result_path=args.result_dir)
+                     result_path=args.env_result_dir)
     if args.eval_msx:
         solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn()]
         optimal_solver = dr_dqn_solver_fn()
-        host = '127.0.0.1' if not args.use_public_ip else '0.0.0.0'
-        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.result_dir,
-                         port=8051, host=host)
+        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.env_result_dir)
+    if args.visualize_results:
+        monitor.visualize_results(result_path=args.result_dir,port=args.port,host=args.host)
