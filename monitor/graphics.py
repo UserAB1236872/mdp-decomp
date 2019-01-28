@@ -190,6 +190,14 @@ def x_layout(app, data, reward_types, actions, prefix):
 
     # create callbacks
     @app.callback(
+        Output(component_id=prefix + 'max_state', component_property='children'),
+        [Input(component_id=prefix + 'solver_dropdown', component_property='value')])
+    def update_max_state_count(selected_base_solver_episode):
+        selected_base_solver, episode = selected_base_solver_episode.split('-')
+        episode = int(episode)
+        return str(len(data[selected_base_solver][episode]['data']))
+
+    @app.callback(
         Output(component_id=prefix + 'curr_state', component_property='children'),
         [Input(component_id=prefix + 'prev_state', component_property='n_clicks'),
          Input(component_id=prefix + 'next_state', component_property='n_clicks'),
