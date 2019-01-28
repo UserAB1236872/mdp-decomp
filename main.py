@@ -57,8 +57,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
     args.env_result_dir = os.path.join(args.result_dir, args.env)
-    if not os.path.exists(args.result_dir):
-        os.makedirs(args.result_dir)
+    if not os.path.exists(args.env_result_dir):
+        os.makedirs(args.env_result_dir)
 
     # initialize environment
     env_fn = lambda: gym.make(args.env)
@@ -87,11 +87,11 @@ if __name__ == '__main__':
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
                     args.train_interval, result_path=args.env_result_dir)
     if args.test:
-        monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
-                     result_path=args.env_result_dir)
+        result = monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
+                              result_path=args.env_result_dir)
+        print(result)
     if args.eval_msx:
-        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn()]
-        optimal_solver = dr_dqn_solver_fn()
-        monitor.eval_msx(env_fn(), solvers, optimal_solver, args.episode_max_steps, result_path=args.env_result_dir)
+        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn(),dr_dqn_solver_fn()]
+        monitor.eval_msx(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, result_path=args.env_result_dir)
     if args.visualize_results:
         monitor.visualize_results(result_path=args.result_dir,port=args.port,host=args.host)

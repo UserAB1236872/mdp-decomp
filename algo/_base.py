@@ -33,16 +33,34 @@ class _BaseLearner:
         else:
             return self.act(state)
 
-    def _msx(self, q_values):
-        msx = {}
+    def _get_explanation(self, q_values):
+        """returns rdx and msx for the given q_values"""
+        msx, rdx = {}, {}
         for a in range(self.actions):
-            msx[a] = {}
+            msx[a], rdx[a] = {}, {}
             for a_dash in range(self.actions):
                 if a != a_dash:
-                    msx[a][a_dash] = {}
+                    msx[a][a_dash], rdx[a][a_dash] = [], {}
+                    pos_rdx, neg_rdx = [], []
+
                     for rt_i, rt in enumerate(self.reward_types):
-                        msx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
-        return msx
+                        rdx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
+                        if rdx[a][a_dash][rt] < 0:
+                            neg_rdx.append((rdx[a][a_dash][rt], rt))
+                        else:
+                            pos_rdx.append((rdx[a][a_dash][rt], rt))
+
+                    neg_rdx_sum = sum(v for v, rt in neg_rdx)
+                    pos_rdx = sorted(pos_rdx, reverse=True)
+
+                    if len(neg_rdx) > 0:
+                        msx_sum = 0
+                        for v, rt in pos_rdx:
+                            msx_sum += v
+                            msx[a][a_dash].append(rt)
+                            if msx_sum > abs(neg_rdx_sum):
+                                break
+        return rdx, msx
 
     def train(self, episodes):
         """ trains the algorithm for given episodes"""
@@ -81,7 +99,13 @@ class _BaseTableLearner(_BaseLearner):
                            for a in range(self.actions)]
         action = int(np.argmax(action_q_values))
         q_values = [self.q_values[state][r_i] for r_i in range(len(self.reward_types))]
-        return action if not debug else (action, q_values, self._msx(q_values))
+
+        if not debug:
+            return action
+        else:
+            rdx, msx = self._get_explanation(q_values)
+            info = {'msx': msx, 'rdx': rdx, 'q_values': q_values}
+            return action, info
 
     def save(self, path):
         pickle.dump(self.q_values, open(path, 'wb'))
@@ -107,7 +131,13 @@ class _BaseDeepLearner(_BaseLearner):
             q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
         action = int(q_values.sum(0).max(0)[1].data.numpy())
         q_values = q_values.data.numpy().tolist()
-        return action if not debug else (action, q_values, self._msx(q_values))
+
+        if not debug:
+            return action
+        else:
+            rdx, msx = self._get_explanation(q_values)
+            info = {'msx': msx, 'rdx': rdx, 'q_values': q_values}
+            return action, info
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)

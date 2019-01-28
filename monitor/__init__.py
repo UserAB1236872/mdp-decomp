@@ -14,9 +14,10 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
         while not done:
             if render:
                 env.render()
-            action, q_values = solver.act(state, debug=True)
+            action, action_info = solver.act(state, debug=True)
             state, reward, done, info = env.step(action)
             if verbose:
+                q_values = action_info['q_values']
                 formated_q = np.concatenate((np.array(['*'] + env.action_meanings).reshape(1, 5),
                                              np.concatenate((np.array(sorted(env.reward_types)).reshape(4, 1),
                                                              np.round(q_values, 2)),
@@ -45,7 +46,7 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
 
     info = {'test': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
             'test_run_mean': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
-            'best_test': {type(solver()).__name__: [-float('inf') for _ in range(runs)] for solver in solvers_fn}}
+            'best_test': {type(solver()).__name__: -float('inf') for solver in solvers_fn}}
 
     env.seed(0)
     for run in range(runs):
@@ -71,9 +72,9 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                     m = info['test_run_mean'][solver_name][run][-1]
                     info['test_run_mean'][solver_name][run].append(((n * m + perf) / (n + 1)))
 
-                if info['test'][solver_name][run][-1] >= info['best_test'][solver_name][run]:
+                if info['test'][solver_name][run][-1] >= info['best_test'][solver_name]:
                     solver.save(os.path.join(result_path, solver_name + '.p'))
-                    info['best_test'][solver_name][run] = info['test'][solver_name][run][-1]
+                    info['best_test'][solver_name] = info['test'][solver_name][run][-1]
 
             print('Run {} : {}/{} ==> {}'.format(run, curr_eps, max_eps,
                                                  [(k, round(info['test_run_mean'][k][run][-1], 2)) for k in
@@ -85,54 +86,67 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             solver_name = type(solver).__name__
             _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
             _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
-        _data = {'data': _test_data, 'run_mean': _test_run_mean}
+        _data = {'data': _test_data, 'run_mean': _test_run_mean, 'runs': runs}
         pickle.dump(_data, open(os.path.join(result_path, 'train_data.p'), 'wb'))
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
 
-def eval(env, solvers, eval_eps, eps_max_steps, result_path, render=False):
-    info = {'test': {type(solver).__name__: [] for solver in solvers}}
+def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False):
+    data = {}
     # evaluate each solver
-    for solver in solvers:
+    for solver_fn in solvers_fn:
+        solver = solver_fn()
         env.seed(0)
         solver_name = type(solver).__name__
         solver.restore(os.path.join(result_path, solver_name + '.p'))
         perf = test(env, solver, eval_eps, eps_max_steps, render)
-        info['test'][solver_name].append(perf)
 
-    print([(s, np.average(info['test'][s])) for s in info['test']])
-    return info
+        if solver_name in data:
+            data[solver_name].append(perf)
+        else:
+            data[solver_name] = [perf]
+
+    data = {k: np.average(v) for k, v in data.items()}
+
+    return data
 
 
-def eval_msx(env, solvers, optimal_solver, eps_max_steps, result_path):
-    data = {'msx': [], 'actions': env.action_meanings, 'reward_types': sorted(env.reward_types)}
-    optimal_solver_name = type(optimal_solver).__name__
-    solver_names = []
-    for solver in solvers + [optimal_solver]:
+def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
+    data = {}
+    for solver in solvers:
         solver_name = type(solver).__name__
         solver.restore(os.path.join(result_path, solver_name + '.p'))
-        solver_names.append(solver_name)
 
     env.seed(0)
-    steps, done = 0, False
-    state = env.reset()
-    while not done:
-        action, q_values, msx = optimal_solver.act(state, debug=True)
-        state_info = {'state': env.render(mode='print'),
-                      'solvers': {optimal_solver_name: {'msx': msx, 'q_values': q_values, 'action': action}}}
-        for solver in solvers:
-            solver_name = type(solver).__name__
-            _action, _q_values, _msx = solver.act(state, debug=True)
-            state_info['solvers'][solver_name] = {'msx': _msx, 'q_values': _q_values, 'action': _action}
+    for base_solver in solvers:
+        base_solver_name = type(base_solver).__name__
+        solver_data = []
+        for ep in range(eval_episodes):
+            ep_reward = 0
+            state = env.reset()
+            steps, done = 0, False
+            ep_data = []
+            while not done:
+                action, action_info = base_solver.act(state, debug=True)
+                state_info = {'state': env.render(mode='print'), 'solvers': {base_solver_name: action_info}}
+                state_info['solvers'][base_solver_name]['action'] = action
 
-        state, reward, done, _ = env.step(action)
-        done = done or (steps >= eps_max_steps)
-        steps += 1
+                for solver in solvers:
+                    solver_name = type(solver).__name__
+                    _action, _action_info = solver.act(state, debug=True)
+                    state_info['solvers'][solver_name] = _action_info
+                    state_info['solvers'][solver_name]['action'] = _action
 
-        data['msx'].append(state_info)
+                state, reward, done, _ = env.step(action)
+                done = done or (steps >= eps_max_steps)
+                steps += 1
+                ep_reward += reward
 
-    _data = {'data': data['msx'], 'solvers': solver_names, 'reward_types': sorted(env.reward_types),
-             'actions': env.action_meanings, 'optimal_solver': optimal_solver_name}
+                ep_data.append(state_info)
+            solver_data.append({'data': ep_data, 'score': ep_reward})
+        data[base_solver_name] = solver_data
+
+    _data = {'data': data, 'reward_types': sorted(env.reward_types), 'actions': env.action_meanings}
     pickle.dump(_data, open(os.path.join(result_path, 'x_data.p'), 'wb'))
 
 

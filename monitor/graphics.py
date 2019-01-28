@@ -77,43 +77,57 @@ def plot(perf_data, run_mean_data, file_path):
     plotting.save(p)
 
 
-def x_layout(app, data, solvers, reward_types, actions, optimal_solver, prefix):
+def x_layout(app, data, reward_types, actions, prefix):
     # graph_style = {'width': '20%', 'display': 'inline-block'}
     graph_style = {}
+    solvers = data.keys()
     game_area_style = {'width': '300px', 'float': 'left', 'position': 'fixed'}
-    graph_area_style = {'width': str(500 * len(solvers)) + 'px', 'float': 'right', 'position': 'absolute'}
+    graph_area_style = {'width': str(500 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
 
-    reward_colors = {rt: cl.scales['10']['qual']['Set3'][i] for i, rt in enumerate(reward_types)}
+    reward_colors = {rt: cl.scales['7']['qual']['Dark2'][i] for i, rt in enumerate(reward_types)}
+
+    solver_dropdown_options = []
+    for solver in solvers:
+        for i, ep in enumerate(data[solver]):
+            option = {'label': str(i) + '- ' + solver + '- Score: ' + str(ep['score']),
+                      'value': solver + '-' + str(i)}
+            solver_dropdown_options.append(option)
+    solver_dropdown = dcc.Dropdown(
+        id=prefix + 'solver_dropdown',
+        options=solver_dropdown_options,
+        value=solver_dropdown_options[0]['value']
+    )
+    manager = {'n_clicks': {}, 'curr_solver_episode': solver_dropdown_options[0]['value']}
     action_options = []
     for i, a in enumerate(actions):
         action_options += [{'label': a + ',' + a_dash, 'value': str(i) + '_' + str(j)} for j, a_dash in
-                           enumerate(actions) if
-                           a != a_dash]
-    state_slider = dcc.Slider(
-        className='state_selector',
-        id=prefix + 'state_selector',
-        min=0,
-        max=len(data) - 1,
-        step=1,
-        value=0,
-        marks={i: str(i).format(i) for i in range(len(data))},
-    )
-    msx_checkbox = dcc.Checklist(
-        id=prefix + 'msx_checkbox',
-        options=[
-            {'label': 'Show MSX', 'value': 'MSX'}
-        ],
-        values=[]
-    )
+                           enumerate(actions) if a != a_dash]
 
-    q_values_graphs, msx_graphs = [], []
+    state_selector = html.Div(className='state_selector',
+                              id=prefix + 'state_selector',
+                              children=[
+                                  html.Button('Prev State', id=prefix + 'prev_state'),
+                                  html.Span('0', id=prefix + 'curr_state'),
+                                  html.Span('/'),
+                                  html.Span(str(len(data) - 1), id=prefix + 'max_state'),
+                                  html.Button('Next State', id=prefix + 'next_state')
+                              ])
+    manager['n_clicks'][prefix + 'prev_state'] = 0
+    manager['n_clicks'][prefix + 'next_state'] = 0
+
+    q_values_graphs, rdx_graphs, msx_graphs, graph_action_pairs, greedy_actions = [], [], [], [], []
     for solver in solvers:
         q_graph = dcc.Graph(
             id=prefix + 'q-value-' + solver,
             className=solver,
             style=graph_style
         )
-        m_graph = dcc.Graph(
+        rdx_graph = dcc.Graph(
+            id=prefix + 'rdx-' + solver,
+            className=solver,
+            style=graph_style
+        )
+        msx_graph = dcc.Graph(
             id=prefix + 'msx-' + solver,
             className=solver,
             style=graph_style
@@ -125,50 +139,112 @@ def x_layout(app, data, solvers, reward_types, actions, optimal_solver, prefix):
             className='action_pair'
         )
         q_values_graphs.append(html.Div(className='graph_box', children=[q_graph]))
-        msx_graphs.append(html.Div(className='graph_box', children=[m_graph, action_pair_selector]))
+        graph_action_pairs.append(html.Div(className='graph_box', children=[action_pair_selector]))
+        msx_graphs.append(html.Div(className='graph_box', children=[msx_graph]))
+        rdx_graphs.append(html.Div(className='graph_box', children=[rdx_graph]))
+        greedy_actions.append(html.Div(className='graph_box', children=[html.Div(children='', className='center',
+                                                                                 id=prefix + 'greedy_action-' + solver)]))
+
+    q_values_graphs.append(html.Div(className='clear'))
+    msx_graphs.append(html.Div(className='clear'))
+    rdx_graphs.append(html.Div(className='clear'))
+    graph_action_pairs.append(html.Div(className='clear'))
+    greedy_actions.append(html.Div(className='clear'))
 
     q_value_wrapper = html.Section(children=[html.Div(children='Decomposed Q-values', className='title'),
                                              html.Div(className='graph_group', children=q_values_graphs),
                                              html.Div(className='clear')])
-    msx_wrapper = html.Section(children=[html.Div(children='Explanations', className='title'),
+    msx_wrapper = html.Section(children=[html.Div(children='MSX', className='title'),
                                          html.Div(className='graph_group', children=msx_graphs),
                                          html.Div(className='clear')])
+    rdx_wrapper = html.Section(children=[html.Div(children='RDX', className='title'),
+                                         html.Div(className='graph_group', children=rdx_graphs),
+                                         html.Div(className='clear')])
+    action_pair_wrapper = html.Section(children=[html.Div(children='Action Pair Selector for MSX', className='title'),
+                                                 html.Div(className='graph_group', children=graph_action_pairs),
+                                                 html.Div(className='clear')])
+    greedy_action_wrapper = html.Section(children=[html.Div(children='Greedy Action:', className='title'),
+                                                   html.Div(className='graph_group', children=greedy_actions),
+                                                   html.Div(className='clear')])
 
+    solver_dropdown_wrapper = html.Div(children=[html.Div(children='Trajectory Selector:'), solver_dropdown],
+                                       className='solver_selector')
     # create the layout
     # action_wrap = html.Div(className='action_area', children=["Action Pair:", action_pair_selector])
-    state_slider_wrap = html.Div(className='trajectory', children=["Trajectory:", state_slider])
+    state_slider_wrap = html.Div(className='trajectory', children=["States:", state_selector])
+
+    state_info_wrap = html.Div(children=[html.Div('State Info:'),
+                                         html.Div(id=prefix + 'state', children='', className='state')])
 
     game_area = html.Div(className='game_area', style=game_area_style,
-                         children=[html.Div(children=[html.Div(id=prefix + 'state', children='', className='state'),
-                                                      msx_checkbox,
+                         children=[html.Div(children=[solver_dropdown_wrapper,
+                                                      state_info_wrap,
                                                       state_slider_wrap
                                                       ])])
     graph_area = html.Div(className='graph_area', style=graph_area_style,
-                          children=[q_value_wrapper, msx_wrapper])
+                          children=[q_value_wrapper, rdx_wrapper, msx_wrapper, action_pair_wrapper,
+                                    greedy_action_wrapper])
     # game_control = html.Div(children=[state_slider_wrap, msx_checkbox], className='game_control')
     children = [game_area, graph_area]
     layout = html.Div(children=children)
 
     # create callbacks
     @app.callback(
+        Output(component_id=prefix + 'curr_state', component_property='children'),
+        [Input(component_id=prefix + 'prev_state', component_property='n_clicks'),
+         Input(component_id=prefix + 'next_state', component_property='n_clicks'),
+         Input(component_id=prefix + 'solver_dropdown', component_property='value')],
+        [State(component_id=prefix + 'curr_state', component_property='children'),
+         State(component_id=prefix + 'max_state', component_property='children')])
+    def update_state(prev_state_n_clicks, next_state_n_clicks, selected_solver_episode, curr_state, max_state):
+        if selected_solver_episode == manager['curr_solver_episode']:
+            curr_state, max_state = int(curr_state), int(max_state)
+            prev_state_n_clicks = 0 if prev_state_n_clicks is None else prev_state_n_clicks
+            next_state_n_clicks = 0 if next_state_n_clicks is None else next_state_n_clicks
+
+            if manager['n_clicks'][prefix + 'prev_state'] < prev_state_n_clicks:
+                curr_state = (curr_state - 1) if curr_state > 0 else 0
+            elif manager['n_clicks'][prefix + 'next_state'] < next_state_n_clicks:
+                curr_state = min(curr_state + 1, max_state)
+            manager['n_clicks'][prefix + 'prev_state'] = prev_state_n_clicks
+            manager['n_clicks'][prefix + 'next_state'] = next_state_n_clicks
+        else:
+            manager['curr_solver_episode'] = selected_solver_episode
+            manager['n_clicks'][prefix + 'prev_state'] = 0
+            manager['n_clicks'][prefix + 'next_state'] = 0
+            curr_state = 0
+        return str(curr_state)
+
+    # create callbacks
+    @app.callback(
         Output(component_id=prefix + 'state', component_property='children'),
-        [Input(component_id=prefix + 'state_selector', component_property='value')])
-    def update_state(i):
-        html_state = [html.Span(children=row) for row in data[i]['state'].split('\n')]
+        [Input(component_id=prefix + 'curr_state', component_property='children')],
+        [State(component_id=prefix + 'solver_dropdown', component_property='value')])
+    def update_state_info(curr_state, selected_solver_episode):
+        selected_base_solver, episode = selected_solver_episode.split('-')
+        episode = int(episode)
+        curr_state = int(curr_state)
+        html_state = [html.Span(children=row) for row in
+                      data[selected_base_solver][episode]['data'][curr_state]['state'].split('\n')]
         return html_state
 
     for solver in solvers:
 
         @app.callback(
             Output(component_id=prefix + 'q-value-' + solver, component_property='figure'),
-            [Input(component_id=prefix + 'state_selector', component_property='value')],
-            [State(component_id=prefix + 'q-value-' + solver, component_property='className')])
-        def update_q_graphs(i, solver):
+            [Input(component_id=prefix + 'curr_state', component_property='children')],
+            [State(component_id=prefix + 'q-value-' + solver, component_property='className'),
+             State(component_id=prefix + 'solver_dropdown', component_property='value')])
+        def update_q_graphs(i, solver, selected_base_solver_episode):
+            selected_base_solver, episode = selected_base_solver_episode.split('-')
+            episode = int(episode)
+            i = int(i)
             rt_data = []
             for rt_i, rt in enumerate(reward_types):
                 rt_data.append({'x': actions,
-                                'y': [data[i]['solvers'][solver]['q_values'][rt_i][a] for a in
-                                      range(len(actions))],
+                                'y': [
+                                    data[selected_base_solver][episode]['data'][i]['solvers'][solver]['q_values'][rt_i][a]
+                                    for a in range(len(actions))],
                                 'type': 'bar',
                                 'name': rt,
                                 'marker': {'color': reward_colors[rt]}
@@ -183,36 +259,49 @@ def x_layout(app, data, solvers, reward_types, actions, optimal_solver, prefix):
 
         @app.callback(
             Output(component_id=prefix + 'action_pair_selector-' + solver, component_property='value'),
-            [Input(component_id=prefix + 'state_selector', component_property='value')],
-            [State(component_id=prefix + 'q-value-' + solver, component_property='className')])
-        def update_action_pair(state, solver):
-            greedy_act = data[state]['solvers'][solver]['action']
+            [Input(component_id=prefix + 'curr_state', component_property='children')],
+            [State(component_id=prefix + 'q-value-' + solver, component_property='className'),
+             State(component_id=prefix + 'solver_dropdown', component_property='value')])
+        def update_action_pair(state, solver, selected_base_solver_episode):
+            selected_base_solver, episode = selected_base_solver_episode.split('-')
+            episode = int(episode)
+            state = int(state)
+            greedy_act = data[selected_base_solver][episode]['data'][state]['solvers'][solver]['action']
             return str(greedy_act) + '_' + str([x for x in range(len(actions)) if x != greedy_act][0])
 
         @app.callback(
-            Output(component_id=prefix + 'msx-' + solver, component_property='figure'),
-            [Input(component_id=prefix + 'action_pair_selector-' + solver, component_property='value'),
-             Input(component_id=prefix + 'msx_checkbox', component_property='values')],
-            [State(component_id=prefix + 'state_selector', component_property='value'),
-             State(component_id=prefix + 'msx-' + solver, component_property='className')])
-        def update_msx_graphs(action_pair, msx_checkbox_val, state, solver):
+            Output(component_id=prefix + 'greedy_action-' + solver, component_property='children'),
+            [Input(component_id=prefix + 'curr_state', component_property='children')],
+            [State(component_id=prefix + 'q-value-' + solver, component_property='className'),
+             State(component_id=prefix + 'solver_dropdown', component_property='value')])
+        def update_greedy_action(state, solver, selected_base_solver_episode):
+            selected_base_solver, episode = selected_base_solver_episode.split('-')
+            episode = int(episode)
+            state = int(state)
+            greedy_act = data[selected_base_solver][episode]['data'][state]['solvers'][solver]['action']
+            return 'Action: ' + actions[greedy_act]
+
+        @app.callback(
+            Output(component_id=prefix + 'rdx-' + solver, component_property='figure'),
+            [Input(component_id=prefix + 'action_pair_selector-' + solver, component_property='value')],
+            [State(component_id=prefix + 'curr_state', component_property='children'),
+             State(component_id=prefix + 'rdx-' + solver, component_property='className'),
+             State(component_id=prefix + 'solver_dropdown', component_property='value')])
+        def update_rdx_graphs(action_pair, state, solver, selected_base_solver_episode):
+            selected_base_solver, episode = selected_base_solver_episode.split('-')
+            episode = int(episode)
+            state = int(state)
             first_action, sec_action = [int(a) for a in action_pair.split('_')]
-            use_msx = len(msx_checkbox_val) > 0
             rt_data = []
             for rt_i, rt in enumerate(reward_types):
                 rt_data.append({'x': [''],
-                                'y': [round(data[state]['solvers'][solver]['msx'][first_action][sec_action][rt], 2)],
+                                'y': [round(
+                                    data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                                        first_action][sec_action][rt], 2)],
                                 'type': 'bar',
                                 'name': rt,
                                 'marker': {'color': reward_colors[rt]}})
             rt_data.sort(key=lambda x: x['y'][0], reverse=True)
-            if use_msx:
-                for i in range(len(rt_data) - 1):
-                    left = sum(rd['y'][0] for rd in rt_data[: i + 1])
-                    right = sum(rd['y'][0] for rd in rt_data[i + 1:])
-                    if left > right:
-                        rt_data = rt_data[: i + 1]
-                        break
 
             figure = {
                 'data': rt_data,
@@ -223,6 +312,89 @@ def x_layout(app, data, solvers, reward_types, actions, optimal_solver, prefix):
             }
             return figure
 
+        @app.callback(
+            Output(component_id=prefix + 'msx-' + solver, component_property='figure'),
+            [Input(component_id=prefix + 'action_pair_selector-' + solver, component_property='value')],
+            [State(component_id=prefix + 'curr_state', component_property='children'),
+             State(component_id=prefix + 'msx-' + solver, component_property='className'),
+             State(component_id=prefix + 'solver_dropdown', component_property='value')])
+        def update_msx_graphs(action_pair, state, solver, selected_base_solver_episode):
+            selected_base_solver, episode = selected_base_solver_episode.split('-')
+            episode = int(episode)
+            state = int(state)
+            first_action, sec_action = [int(a) for a in action_pair.split('_')]
+            rt_data = []
+            for rt in data[selected_base_solver][episode]['data'][state]['solvers'][solver]['msx'][first_action][
+                sec_action]:
+                rt_data.append({'x': [''],
+                                'y': [round(
+                                    data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                                        first_action][sec_action][rt], 2)],
+                                'type': 'bar',
+                                'name': rt,
+                                'marker': {'color': reward_colors[rt]}})
+            rt_data.sort(key=lambda x: x['y'][0], reverse=True)
+
+            figure = {
+                'data': rt_data,
+                'layout': {
+                    'title': solver,
+                    'showlegend': True
+                }
+            }
+            return figure
+
+    return layout
+
+
+def train_page_layout(app, train_data, run_mean_data, solvers, runs=1, prefix=''):
+    solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(solvers)}
+    train_traces, run_mean_traces = [], []
+    for solver in solvers:
+        train_trace = {
+            'x': [_ + 1 for _ in range(len(train_data[solver]))],
+            'y': train_data[solver],
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': solver,
+            'line': {'color': solver_colors[solver]}
+        }
+        run_mean_trace = {
+            'x': [_ + 1 for _ in range(len(run_mean_data[solver]))],
+            'y': run_mean_data[solver],
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': solver,
+            'line': {'color': solver_colors[solver]}
+        }
+        train_traces.append(train_trace)
+        run_mean_traces.append(run_mean_trace)
+
+    train_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-train',
+            figure={
+                'data': train_traces,
+                'layout': {
+                    'title': 'Running Score',
+                    'showlegend': True
+                }
+            }
+        )])
+    run_mean_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-run_mean',
+            figure={
+                'data': run_mean_traces,
+                'layout': {
+                    'title': 'Running Score Mean',
+                    'showlegend': True
+                }
+            }
+        )])
+
+    info_box = html.Div(children='Runs:' + str(runs))
+    layout = html.Div(children=[train_graph, run_mean_graph, info_box])
     return layout
 
 
@@ -241,23 +413,25 @@ def visualize_results(result_path, host, port):
         x_path = os.path.join(env_path, 'x_data.p')
         train_path = os.path.join(env_path, 'train_data.p')
 
+        if os.path.exists(train_path):
+            prefix = env.lower() + '_training'
+            _path = '/' + prefix
+            train_page = dcc.Link(env + ': Training ', href=_path)
+            train_data = pickle.load(open(train_path, 'rb'))
+            layouts[_path] = train_page_layout(app, train_data['data'], train_data['run_mean'],
+                                               train_data['data'].keys(), runs=train_data['runs'], prefix=prefix)
+            index_children.append(train_page)
+            index_children.append(html.Br())
+
         if os.path.exists(x_path):
             prefix = env.lower() + '_explanations'
             _path = '/' + prefix
             x_page = dcc.Link(env + ': Explanations', href=_path)
             x_data = pickle.load(open(x_path, 'rb'))
-            layouts[_path] = x_layout(app, x_data['data'], x_data['solvers'], x_data['reward_types'],
-                                      x_data['actions'], x_data['optimal_solver'], prefix)
+            layouts[_path] = x_layout(app, x_data['data'], x_data['reward_types'],
+                                      x_data['actions'], prefix)
             index_children.append(x_page)
             index_children.append(html.Br())
-
-        # if os.path.exists(train_path):
-        #     x_data = pickle.load(open(train_path, 'rb'))
-        #     layouts[env]['train'] = x_layout(x_data['data'], x_data['solvers'], x_data['reward_types'],
-        #                                      x_data['actions'], x_data['optimal_solver'])
-        #     train_page = dcc.Link(env + ': Explanations', href='/' + env.lower() + '_explanations')
-        #     index_children.append(train_page)
-        #     index_children.append(html.Br())
 
     app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
