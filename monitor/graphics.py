@@ -185,7 +185,13 @@ def x_layout(app, data, reward_types, actions, prefix):
     state_slider_wrap = html.Div(className='trajectory', children=["States:", state_selector])
 
     state_info_wrap = html.Div(children=[html.Div('State Info:'),
-                                         html.Div(id=prefix + 'state', children='', className='state')])
+                                         html.Div(id=prefix + 'state', children='', className='state'),
+                                         html.Div('Reward Info:'),
+                                         html.Div(id=prefix + 'reward-info', children='', className='reward_info'),
+                                         html.Span('Terminal:'),
+                                         html.Span(id=prefix + 'terminal', children='', className='terminal')],
+                               className='state_info_box'
+                               )
 
     game_area = html.Div(className='game_area', style=game_area_style,
                          children=[html.Div(children=[solver_dropdown_wrapper,
@@ -247,6 +253,30 @@ def x_layout(app, data, reward_types, actions, prefix):
                       data[selected_base_solver][episode]['data'][curr_state]['state'].split('\n')]
         return html_state
 
+    # create callbacks
+    @app.callback(
+        Output(component_id=prefix + 'reward-info', component_property='children'),
+        [Input(component_id=prefix + 'curr_state', component_property='children')],
+        [State(component_id=prefix + 'solver_dropdown', component_property='value')])
+    def update_reward_info(curr_state, selected_solver_episode):
+        selected_base_solver, episode = selected_solver_episode.split('-')
+        episode = int(episode)
+        curr_state = int(curr_state)
+        html_reward = [html.Div(children=row[0]+':'+str(row[1])) for row in
+                      data[selected_base_solver][episode]['data'][curr_state]['reward'].items()]
+        return html_reward
+
+    # create callbacks
+    @app.callback(
+        Output(component_id=prefix + 'terminal', component_property='children'),
+        [Input(component_id=prefix + 'curr_state', component_property='children')],
+        [State(component_id=prefix + 'solver_dropdown', component_property='value')])
+    def update_terminal_info(curr_state, selected_solver_episode):
+        selected_base_solver, episode = selected_solver_episode.split('-')
+        episode = int(episode)
+        curr_state = int(curr_state)
+        return html.Span(str(data[selected_base_solver][episode]['data'][curr_state]['terminal']))
+
     for solver in solvers:
 
         @app.callback(
@@ -265,9 +295,9 @@ def x_layout(app, data, reward_types, actions, prefix):
                     range(len(reward_types))))
             figure = {
                 'data': [{'x': actions,
-                         'y': y_data,
-                         'type': 'bar',
-                         }],
+                          'y': y_data,
+                          'type': 'bar',
+                          }],
                 'layout': {
                     'title': solver
                 }

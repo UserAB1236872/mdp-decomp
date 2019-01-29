@@ -126,23 +126,32 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
             state = env.reset()
             steps, done = 0, False
             ep_data = []
-            while not done:
-                action, action_info = base_solver.act(state, debug=True)
-                state_info = {'state': env.render(mode='print'), 'solvers': {base_solver_name: action_info}}
-                state_info['solvers'][base_solver_name]['action'] = action
 
+            state_info = {'state': env.render(mode='print'),'solvers':{}, 'terminal': done,
+                          'reward': {_:0 for _ in env.reward_types}}
+            for solver in solvers:
+                solver_name = type(solver).__name__
+                _action, _action_info = solver.act(state, debug=True)
+                state_info['solvers'][solver_name] = _action_info
+                state_info['solvers'][solver_name]['action'] = _action
+            ep_data.append(state_info)
+
+            while not done:
+                action = state_info['solvers'][base_solver_name]['action']
+                state, reward, done, step_info = env.step(action)
+                done = done or (steps >= eps_max_steps)
+                steps += 1
+                ep_reward += reward
+
+                state_info = {'state': env.render(mode='print'), 'solvers':{}, 'terminal': done,
+                              'reward': step_info['reward_decomposition']}
                 for solver in solvers:
                     solver_name = type(solver).__name__
                     _action, _action_info = solver.act(state, debug=True)
                     state_info['solvers'][solver_name] = _action_info
                     state_info['solvers'][solver_name]['action'] = _action
-
-                state, reward, done, _ = env.step(action)
-                done = done or (steps >= eps_max_steps)
-                steps += 1
-                ep_reward += reward
-
                 ep_data.append(state_info)
+
             solver_data.append({'data': ep_data, 'score': ep_reward})
         data[base_solver_name] = solver_data
 
