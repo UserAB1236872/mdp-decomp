@@ -80,7 +80,7 @@ def plot(perf_data, run_mean_data, file_path):
 def x_layout(app, data, reward_types, actions, prefix):
     # graph_style = {'width': '20%', 'display': 'inline-block'}
     graph_style = {}
-    solvers = data.keys()
+    solvers = sorted(data.keys())
     game_area_style = {'width': '300px', 'float': 'left', 'position': 'fixed'}
     graph_area_style = {'width': str(500 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
 
@@ -115,10 +115,15 @@ def x_layout(app, data, reward_types, actions, prefix):
     manager['n_clicks'][prefix + 'prev_state'] = 0
     manager['n_clicks'][prefix + 'next_state'] = 0
 
-    q_values_graphs, rdx_graphs, msx_graphs, graph_action_pairs, greedy_actions = [], [], [], [], []
+    q_values_graphs, decomp_q_values_graphs, rdx_graphs, msx_graphs, graph_action_pairs, greedy_actions = [], [], [], [], [], []
     for solver in solvers:
         q_graph = dcc.Graph(
-            id=prefix + 'q-value-' + solver,
+            id=prefix + 'q-value' + solver,
+            className=solver,
+            style=graph_style
+        )
+        decomp_q_graph = dcc.Graph(
+            id=prefix + 'decomp-q-value' + solver,
             className=solver,
             style=graph_style
         )
@@ -139,6 +144,7 @@ def x_layout(app, data, reward_types, actions, prefix):
             className='action_pair'
         )
         q_values_graphs.append(html.Div(className='graph_box', children=[q_graph]))
+        decomp_q_values_graphs.append(html.Div(className='graph_box', children=[decomp_q_graph]))
         graph_action_pairs.append(html.Div(className='graph_box', children=[action_pair_selector]))
         msx_graphs.append(html.Div(className='graph_box', children=[msx_graph]))
         rdx_graphs.append(html.Div(className='graph_box', children=[rdx_graph]))
@@ -146,23 +152,28 @@ def x_layout(app, data, reward_types, actions, prefix):
                                                                                  id=prefix + 'greedy_action-' + solver)]))
 
     q_values_graphs.append(html.Div(className='clear'))
+    decomp_q_values_graphs.append(html.Div(className='clear'))
     msx_graphs.append(html.Div(className='clear'))
     rdx_graphs.append(html.Div(className='clear'))
     graph_action_pairs.append(html.Div(className='clear'))
     greedy_actions.append(html.Div(className='clear'))
 
-    q_value_wrapper = html.Section(children=[html.Div(children='Decomposed Q-values', className='title'),
+    q_value_wrapper = html.Section(children=[html.Div(children='Q-values', className='title'),
                                              html.Div(className='graph_group', children=q_values_graphs),
                                              html.Div(className='clear')])
+    decomp_q_value_wrapper = html.Section(children=[html.Div(children='Decomposed Q-values', className='title'),
+                                                    html.Div(className='graph_group', children=decomp_q_values_graphs),
+                                                    html.Div(className='clear')])
     msx_wrapper = html.Section(children=[html.Div(children='MSX', className='title'),
                                          html.Div(className='graph_group', children=msx_graphs),
                                          html.Div(className='clear')])
     rdx_wrapper = html.Section(children=[html.Div(children='RDX', className='title'),
                                          html.Div(className='graph_group', children=rdx_graphs),
                                          html.Div(className='clear')])
-    action_pair_wrapper = html.Section(children=[html.Div(children='Action Pair Selector for MSX', className='title'),
-                                                 html.Div(className='graph_group', children=graph_action_pairs),
-                                                 html.Div(className='clear')])
+    action_pair_wrapper = html.Section(
+        children=[html.Div(children='Action Pair Selector for RDX/MSX', className='title'),
+                  html.Div(className='graph_group', children=graph_action_pairs),
+                  html.Div(className='clear')])
     greedy_action_wrapper = html.Section(children=[html.Div(children='Greedy Action:', className='title'),
                                                    html.Div(className='graph_group', children=greedy_actions),
                                                    html.Div(className='clear')])
@@ -182,8 +193,8 @@ def x_layout(app, data, reward_types, actions, prefix):
                                                       state_slider_wrap
                                                       ])])
     graph_area = html.Div(className='graph_area', style=graph_area_style,
-                          children=[q_value_wrapper, rdx_wrapper, msx_wrapper, action_pair_wrapper,
-                                    greedy_action_wrapper])
+                          children=[q_value_wrapper, greedy_action_wrapper, decomp_q_value_wrapper, action_pair_wrapper,
+                                    rdx_wrapper, msx_wrapper])
     # game_control = html.Div(children=[state_slider_wrap, msx_checkbox], className='game_control')
     children = [game_area, graph_area]
     layout = html.Div(children=children)
@@ -195,7 +206,7 @@ def x_layout(app, data, reward_types, actions, prefix):
     def update_max_state_count(selected_base_solver_episode):
         selected_base_solver, episode = selected_base_solver_episode.split('-')
         episode = int(episode)
-        return str(len(data[selected_base_solver][episode]['data']))
+        return str(len(data[selected_base_solver][episode]['data']) - 1)
 
     @app.callback(
         Output(component_id=prefix + 'curr_state', component_property='children'),
@@ -239,11 +250,36 @@ def x_layout(app, data, reward_types, actions, prefix):
     for solver in solvers:
 
         @app.callback(
-            Output(component_id=prefix + 'q-value-' + solver, component_property='figure'),
+            Output(component_id=prefix + 'q-value' + solver, component_property='figure'),
             [Input(component_id=prefix + 'curr_state', component_property='children')],
-            [State(component_id=prefix + 'q-value-' + solver, component_property='className'),
+            [State(component_id=prefix + 'decomp-q-value' + solver, component_property='className'),
              State(component_id=prefix + 'solver_dropdown', component_property='value')])
         def update_q_graphs(i, solver, selected_base_solver_episode):
+            selected_base_solver, episode = selected_base_solver_episode.split('-')
+            episode = int(episode)
+            i = int(i)
+            y_data = []
+            for a in range(len(actions)):
+                y_data.append(sum(
+                    data[selected_base_solver][episode]['data'][i]['solvers'][solver]['q_values'][rt_i][a] for rt_i in
+                    range(len(reward_types))))
+            figure = {
+                'data': [{'x': actions,
+                         'y': y_data,
+                         'type': 'bar',
+                         }],
+                'layout': {
+                    'title': solver
+                }
+            }
+            return figure
+
+        @app.callback(
+            Output(component_id=prefix + 'decomp-q-value' + solver, component_property='figure'),
+            [Input(component_id=prefix + 'curr_state', component_property='children')],
+            [State(component_id=prefix + 'decomp-q-value' + solver, component_property='className'),
+             State(component_id=prefix + 'solver_dropdown', component_property='value')])
+        def update_decomp_q_graphs(i, solver, selected_base_solver_episode):
             selected_base_solver, episode = selected_base_solver_episode.split('-')
             episode = int(episode)
             i = int(i)
@@ -251,7 +287,8 @@ def x_layout(app, data, reward_types, actions, prefix):
             for rt_i, rt in enumerate(reward_types):
                 rt_data.append({'x': actions,
                                 'y': [
-                                    data[selected_base_solver][episode]['data'][i]['solvers'][solver]['q_values'][rt_i][a]
+                                    data[selected_base_solver][episode]['data'][i]['solvers'][solver]['q_values'][rt_i][
+                                        a]
                                     for a in range(len(actions))],
                                 'type': 'bar',
                                 'name': rt,
@@ -268,7 +305,7 @@ def x_layout(app, data, reward_types, actions, prefix):
         @app.callback(
             Output(component_id=prefix + 'action_pair_selector-' + solver, component_property='value'),
             [Input(component_id=prefix + 'curr_state', component_property='children')],
-            [State(component_id=prefix + 'q-value-' + solver, component_property='className'),
+            [State(component_id=prefix + 'decomp-q-value' + solver, component_property='className'),
              State(component_id=prefix + 'solver_dropdown', component_property='value')])
         def update_action_pair(state, solver, selected_base_solver_episode):
             selected_base_solver, episode = selected_base_solver_episode.split('-')
@@ -280,7 +317,7 @@ def x_layout(app, data, reward_types, actions, prefix):
         @app.callback(
             Output(component_id=prefix + 'greedy_action-' + solver, component_property='children'),
             [Input(component_id=prefix + 'curr_state', component_property='children')],
-            [State(component_id=prefix + 'q-value-' + solver, component_property='className'),
+            [State(component_id=prefix + 'decomp-q-value' + solver, component_property='className'),
              State(component_id=prefix + 'solver_dropdown', component_property='value')])
         def update_greedy_action(state, solver, selected_base_solver_episode):
             selected_base_solver, episode = selected_base_solver_episode.split('-')
