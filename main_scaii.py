@@ -15,7 +15,8 @@ class DRModel(nn.Module):
         self.state_size = state_size
 
         for rt in range(reward_types):
-            model = nn.Linear(state_size, actions, bias=False)
+            model = nn.Sequential(nn.Linear(state_size, 256, bias=False),
+                                  nn.Linear(256, actions, bias=False))
             setattr(self, 'model_{}'.format(rt), model)
             getattr(self, 'model_{}'.format(rt)).weight.data.fill_(0)
 
@@ -25,8 +26,8 @@ class DRModel(nn.Module):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--env', default='Cliffworld-v0', help='Name of the environment')
-    parser.add_argument('--result_dir', default=os.path.join(os.getcwd(), 'results'),
+    parser.add_argument('--env', default='ScaiiFourTowers-v1', help='Name of the Scaii environment')
+    parser.add_argument('--result_dir', default=os.path.join(os.getcwd(), 'results','SCAII'),
                         help="Directory Path to store results")
     parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
     parser.add_argument('--lr', type=float, default=0.01, help='Learning rate')
@@ -54,12 +55,12 @@ if __name__ == '__main__':
     parser.add_argument('--visualize_results', action='store_true', default=False,
                         help=' ')
 
-
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
     args.env_result_dir = os.path.join(args.result_dir, args.env)
     if not os.path.exists(args.env_result_dir):
         os.makedirs(args.env_result_dir)
+
 
     # initialize environment
     env_fn = lambda: gym.make(args.env)
