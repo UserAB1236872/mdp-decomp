@@ -65,10 +65,10 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             'q_val_dev': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn}}
 
     # get optimal policy using the planner
-    # if planner is not None:
-    #     planner.train()
-    #     planner.save(os.path.join(result_path, type(planner).__name__ + '.p'))
-    #     print(test(env, planner, eval_eps, eps_max_steps))
+    if planner is not None:
+        planner.train()
+        planner.save(os.path.join(result_path, type(planner).__name__ + '.p'))
+        print(test(env, planner, eval_eps, eps_max_steps))
 
     env.seed(0)
     for run in range(runs):
