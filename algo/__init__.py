@@ -5,3 +5,4 @@ from .drqlearn import DRQLearn
 from .drsarsa import DRSarsa
 from .drdsarsa import DRDSarsa
 from .hra import HRA
+from .drqiteration import DRQIteration

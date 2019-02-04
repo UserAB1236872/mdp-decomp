@@ -262,8 +262,8 @@ def x_layout(app, data, reward_types, actions, prefix):
         selected_base_solver, episode = selected_solver_episode.split('-')
         episode = int(episode)
         curr_state = int(curr_state)
-        html_reward = [html.Div(children=row[0]+':'+str(row[1])) for row in
-                      data[selected_base_solver][episode]['data'][curr_state]['reward'].items()]
+        html_reward = [html.Div(children=row[0] + ':' + str(row[1])) for row in
+                       data[selected_base_solver][episode]['data'][curr_state]['reward'].items()]
         return html_reward
 
     # create callbacks
@@ -399,15 +399,19 @@ def x_layout(app, data, reward_types, actions, prefix):
             state = int(state)
             first_action, sec_action = [int(a) for a in action_pair.split('_')]
             rt_data = []
-            for rt in data[selected_base_solver][episode]['data'][state]['solvers'][solver]['msx'][first_action][
-                sec_action]:
-                rt_data.append({'x': [''],
-                                'y': [round(
-                                    data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
-                                        first_action][sec_action][rt], 2)],
-                                'type': 'bar',
-                                'name': rt,
-                                'marker': {'color': reward_colors[rt]}})
+            msx_data = data[selected_base_solver][episode]['data'][state]['solvers'][solver]['msx'][first_action][
+                sec_action]
+            pos_msx_data, neg_msx_data = msx_data
+
+            for _msx in [pos_msx_data, neg_msx_data]:
+                for rt in _msx:
+                    rt_data.append({'x': [''],
+                                    'y': [round(
+                                        data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                                            first_action][sec_action][rt], 2)],
+                                    'type': 'bar',
+                                    'name': rt,
+                                    'marker': {'color': reward_colors[rt]}})
             rt_data.sort(key=lambda x: x['y'][0], reverse=True)
 
             figure = {
@@ -422,9 +426,9 @@ def x_layout(app, data, reward_types, actions, prefix):
     return layout
 
 
-def train_page_layout(app, train_data, run_mean_data, solvers, runs=1, prefix=''):
+def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, runs=1, prefix=''):
     solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(solvers)}
-    train_traces, run_mean_traces = [], []
+    train_traces, run_mean_traces, q_val_dev_traces = [], [], []
     for solver in solvers:
         train_trace = {
             'x': [_ + 1 for _ in range(len(train_data[solver]))],
@@ -442,8 +446,17 @@ def train_page_layout(app, train_data, run_mean_data, solvers, runs=1, prefix=''
             'name': solver,
             'line': {'color': solver_colors[solver]}
         }
+        q_val_dev_trace = {
+            'x': [_ + 1 for _ in range(len(q_val_dev_data[solver]))],
+            'y': q_val_dev_data[solver],
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': solver,
+            'line': {'color': solver_colors[solver]}
+        }
         train_traces.append(train_trace)
         run_mean_traces.append(run_mean_trace)
+        q_val_dev_traces.append(q_val_dev_trace)
 
     train_graph = html.Div(className='graph_box', children=[
         dcc.Graph(
@@ -467,9 +480,20 @@ def train_page_layout(app, train_data, run_mean_data, solvers, runs=1, prefix=''
                 }
             }
         )])
+    q_val_dev_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-q_val_dev',
+            figure={
+                'data': q_val_dev_traces,
+                'layout': {
+                    'title': 'Q value Deviation',
+                    'showlegend': True
+                }
+            }
+        )])
 
     info_box = html.Div(children='Runs:' + str(runs))
-    layout = html.Div(children=[train_graph, run_mean_graph, info_box])
+    layout = html.Div(children=[train_graph, run_mean_graph, q_val_dev_graph, info_box])
     return layout
 
 

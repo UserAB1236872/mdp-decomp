@@ -4,7 +4,7 @@ import gym, gym_decomp
 import torch
 import monitor
 import torch.nn as nn
-from algo import DRQLearn, DRSarsa, DRDSarsa, DRDQN, HRA
+from algo import DRQLearn, DRSarsa, DRDSarsa, DRDQN, HRA, DRQIteration
 
 
 class DRModel(nn.Module):
@@ -52,8 +52,9 @@ if __name__ == '__main__':
     parser.add_argument('--port', default='8051',
                         help='hosting port (default:8051)')
     parser.add_argument('--visualize_results', action='store_true', default=False,
+                        help='Visualizes the results in the browser ')
+    parser.add_argument('--use_planner', action='store_true', default=False,
                         help=' ')
-
 
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
@@ -83,16 +84,17 @@ if __name__ == '__main__':
                                 args.min_eps, args.max_eps, args.total_episodes)
     solvers_fn = [dr_qlearn_fn, dr_sarsa_fn, dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
 
+    planner = DRQIteration(env_fn(), args.discount) if args.use_planner else None
     # Fire it up!
     if args.train:
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
-                    args.train_interval, result_path=args.env_result_dir)
+                    args.train_interval, result_path=args.env_result_dir, planner=planner)
     if args.test:
         result = monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
                               result_path=args.env_result_dir)
         print(result)
     if args.eval_msx:
-        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn(),dr_dqn_solver_fn()]
+        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn(), dr_dqn_solver_fn()]
         monitor.eval_msx(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, result_path=args.env_result_dir)
     if args.visualize_results:
-        monitor.visualize_results(result_path=args.result_dir,port=args.port,host=args.host)
+        monitor.visualize_results(result_path=args.result_dir, port=args.port, host=args.host)
