@@ -518,7 +518,8 @@ def visualize_results(result_path, host, port):
             train_page = dcc.Link(env + ': Training ', href=_path)
             train_data = pickle.load(open(train_path, 'rb'))
             layouts[_path] = train_page_layout(app, train_data['data'], train_data['run_mean'],
-                                               train_data['data'].keys(), runs=train_data['runs'], prefix=prefix)
+                                               train_data['q_val_dev'], train_data['data'].keys(),
+                                               runs=train_data['runs'], prefix=prefix)
             index_children.append(train_page)
             index_children.append(html.Br())
 
