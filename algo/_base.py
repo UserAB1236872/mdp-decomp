@@ -6,7 +6,68 @@ from .utils import _LinearDecay
 from torch.optim import SGD
 
 
-class _BasePlanner:
+class _Base:
+    """ Base Class for Decomposed Reward Algorithms with expandability"""
+
+    def __init__(self, env):
+        """
+        :param env: instance of the environment
+        """
+        self.env = env
+        self.actions = env.action_space.n
+        self.reward_types = sorted(env.reward_types)
+
+    def _get_explanation(self, q_values):
+        """returns rdx and msx for the given q_values"""
+        msx, rdx = {}, {}
+        for a in range(self.actions):
+            msx[a], rdx[a] = {}, {}
+            for a_dash in range(self.actions):
+                if a != a_dash:
+                    rdx[a][a_dash] = {}
+                    msx[a][a_dash] = [[], []]  # positive, negative
+                    pos_rdx, neg_rdx = [], []
+
+                    for rt_i, rt in enumerate(self.reward_types):
+                        rdx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
+                        if rdx[a][a_dash][rt] < 0:
+                            neg_rdx.append((rdx[a][a_dash][rt], rt))
+                            msx[a][a_dash][1].append(rt)
+                        else:
+                            pos_rdx.append((rdx[a][a_dash][rt], rt))
+
+                    neg_rdx_sum = sum(v for v, rt in neg_rdx)
+                    pos_rdx = sorted(pos_rdx, reverse=True)
+
+                    if len(neg_rdx) > 0:
+                        msx_sum = 0
+                        for v, rt in pos_rdx:
+                            msx_sum += v
+                            msx[a][a_dash][0].append(rt)
+                            if msx_sum > abs(neg_rdx_sum):
+                                break
+                    msx[a][a_dash] = tuple(msx[a][a_dash])
+
+        return rdx, msx
+
+    def act(self, state, debug=False):
+        """ returns greedy action for the state"""
+        raise NotImplementedError
+
+    def train(self):
+        """ trains the algorithm for given episodes"""
+        raise NotImplementedError
+
+    def save(self, path):
+        """ save relevant properties in given path"""
+        raise NotImplementedError
+
+    def restore(self, path):
+        """ save relevant properties from given path"""
+        raise NotImplementedError
+
+
+class _BaseTablePlanner(_Base):
     """ Base Class for implementing decomposed reward Planning algorithm"""
 
     def __init__(self, env, discount, threshold=0.001):
@@ -16,12 +77,10 @@ class _BasePlanner:
         :param discount: discount for future rewards
         :param threshold:
         """
-        self.env = env
-        self.actions = env.action_space.n
+        super().__init__(env)
         self.state_space = env.states
         self.transition_prob_fn = env.transition_prob
         self.reward_fn = env.reward
-        self.reward_types = sorted(env.reward_types)
         self.threshold = threshold
         self.discount = discount
 
@@ -36,7 +95,7 @@ class _BasePlanner:
                                     for r_i, _ in enumerate(self.reward_types)}
         return state
 
-    def train(self, episodes):
+    def train(self):
         """ trains the algorithm for given episodes"""
         raise NotImplementedError
 
@@ -50,41 +109,8 @@ class _BasePlanner:
     def restore(self, path):
         self.q_values = pickle.load(open(path, 'rb'))
 
-    def _get_explanation(self, q_values):
-        """returns rdx and msx for the given q_values"""
-        msx, rdx = {}, {}
-        for a in range(self.actions):
-            msx[a], rdx[a] = {}, {}
-            for a_dash in range(self.actions):
-                if a != a_dash:
-                    rdx[a][a_dash] = {}
-                    msx[a][a_dash] = [[], []]  # positive, negative
-                    pos_rdx, neg_rdx = [], []
 
-                    for rt_i, rt in enumerate(self.reward_types):
-                        rdx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
-                        if rdx[a][a_dash][rt] < 0:
-                            neg_rdx.append((rdx[a][a_dash][rt], rt))
-                            msx[a][a_dash][1].append(rt)
-                        else:
-                            pos_rdx.append((rdx[a][a_dash][rt], rt))
-
-                    neg_rdx_sum = sum(v for v, rt in neg_rdx)
-                    pos_rdx = sorted(pos_rdx, reverse=True)
-
-                    if len(neg_rdx) > 0:
-                        msx_sum = 0
-                        for v, rt in pos_rdx:
-                            msx_sum += v
-                            msx[a][a_dash][0].append(rt)
-                            if msx_sum > abs(neg_rdx_sum):
-                                break
-                    msx[a][a_dash] = tuple(msx[a][a_dash])
-
-        return rdx, msx
-
-
-class _BaseLearner:
+class _BaseLearner(_Base):
     """ Base Class for implementing decomposed rewards algorithms"""
 
     def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):
@@ -97,9 +123,7 @@ class _BaseLearner:
         :param max_eps: maximum epsilon for exploration
         :param total_episodes: total no. of episodes for training (used for linearly decaying the exploration rate)
         """
-        self.env = env
-        self.actions = env.action_space.n
-        self.reward_types = sorted(env.reward_types)
+        super().__init__(env)
         self.lr = lr
         self.discount = discount
         self.linear_decay = _LinearDecay(min_eps, max_eps, total_episodes)
@@ -110,55 +134,6 @@ class _BaseLearner:
             return random.choice(range(self.actions))
         else:
             return self.act(state)
-
-    def _get_explanation(self, q_values):
-        """returns rdx and msx for the given q_values"""
-        msx, rdx = {}, {}
-        for a in range(self.actions):
-            msx[a], rdx[a] = {}, {}
-            for a_dash in range(self.actions):
-                if a != a_dash:
-                    rdx[a][a_dash] = {}
-                    msx[a][a_dash] = [[], []]  # positive, negative
-                    pos_rdx, neg_rdx = [], []
-
-                    for rt_i, rt in enumerate(self.reward_types):
-                        rdx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
-                        if rdx[a][a_dash][rt] < 0:
-                            neg_rdx.append((rdx[a][a_dash][rt], rt))
-                            msx[a][a_dash][1].append(rt)
-                        else:
-                            pos_rdx.append((rdx[a][a_dash][rt], rt))
-
-                    neg_rdx_sum = sum(v for v, rt in neg_rdx)
-                    pos_rdx = sorted(pos_rdx, reverse=True)
-
-                    if len(neg_rdx) > 0:
-                        msx_sum = 0
-                        for v, rt in pos_rdx:
-                            msx_sum += v
-                            msx[a][a_dash][0].append(rt)
-                            if msx_sum > abs(neg_rdx_sum):
-                                break
-                    msx[a][a_dash] = tuple(msx[a][a_dash])
-
-        return rdx, msx
-
-    def train(self, episodes):
-        """ trains the algorithm for given episodes"""
-        raise NotImplementedError
-
-    def act(self, state, debug=False):
-        """ returns greedy action for the state"""
-        raise NotImplementedError
-
-    def save(self, path):
-        """ save relevant properties in given path"""
-        raise NotImplementedError
-
-    def restore(self, path):
-        """ save relevant properties from given path"""
-        raise NotImplementedError
 
 
 class _BaseTableLearner(_BaseLearner):

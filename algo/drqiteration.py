@@ -1,15 +1,16 @@
 import numpy as np
-from ._base import _BasePlanner
+from ._base import _BaseTablePlanner
 
 
-class DRQIteration(_BasePlanner):
+class DRQIteration(_BaseTablePlanner):
     """ Q Iteration for Decomposed Rewards """
 
     def __init__(self, env, discount, threshold=0.001):
         super().__init__(env, discount, threshold)
 
-    def train(self):
+    def train(self, verbose=False):
         delta = float('inf')
+        i = 0
         while delta >= self.threshold:
             delta = 0
             for state in self.state_space:
@@ -23,7 +24,9 @@ class DRQIteration(_BasePlanner):
                             prob_val_next_state += self.transition_prob_fn(state, action, next_state) * val_next_state
                         self.q_values[str(state)][rt_i][action] = reward + self.discount * prob_val_next_state
                         delta = max(delta, abs(q_val - self.q_values[str(state)][rt_i][action]))
-            print(delta, self.threshold)
+            i += 1
+            if verbose:
+                print('iteration:{} delta:{}/ threshold:{}'.format(i,delta,self.threshold))
 
     def act(self, state, debug=False):
         state = str(state)
