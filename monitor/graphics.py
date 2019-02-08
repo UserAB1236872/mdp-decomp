@@ -12,6 +12,8 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
+import plotly.graph_objs as go
+from plotly import tools
 import pickle
 
 
@@ -299,7 +301,8 @@ def x_layout(app, data, reward_types, actions, prefix):
                           'type': 'bar',
                           }],
                 'layout': {
-                    'title': solver
+                    'title': solver,
+                    'showgrid': True
                 }
             }
             return figure
@@ -327,7 +330,8 @@ def x_layout(app, data, reward_types, actions, prefix):
             figure = {
                 'data': rt_data,
                 'layout': {
-                    'title': solver
+                    'title': solver,
+                    'showgrid': True
                 }
             }
             return figure
@@ -370,9 +374,8 @@ def x_layout(app, data, reward_types, actions, prefix):
             rt_data = []
             for rt_i, rt in enumerate(reward_types):
                 rt_data.append({'x': [''],
-                                'y': [round(
-                                    data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
-                                        first_action][sec_action][rt], 2)],
+                                'y': [data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                                        first_action][sec_action][rt]],
                                 'type': 'bar',
                                 'name': rt,
                                 'marker': {'color': reward_colors[rt]}})
@@ -382,7 +385,8 @@ def x_layout(app, data, reward_types, actions, prefix):
                 'data': rt_data,
                 'layout': {
                     'title': solver,
-                    'showlegend': True
+                    'showlegend': True,
+                    'showgrid': True
                 }
             }
             return figure
@@ -398,30 +402,41 @@ def x_layout(app, data, reward_types, actions, prefix):
             episode = int(episode)
             state = int(state)
             first_action, sec_action = [int(a) for a in action_pair.split('_')]
-            rt_data = []
+
             msx_data = data[selected_base_solver][episode]['data'][state]['solvers'][solver]['msx'][first_action][
                 sec_action]
             pos_msx_data, neg_msx_data = msx_data
 
-            for _msx in [pos_msx_data, neg_msx_data]:
-                for rt in _msx:
-                    rt_data.append({'x': [''],
-                                    'y': [round(
-                                        data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
-                                            first_action][sec_action][rt], 2)],
-                                    'type': 'bar',
-                                    'name': rt,
-                                    'marker': {'color': reward_colors[rt]}})
-            rt_data.sort(key=lambda x: x['y'][0], reverse=True)
+            pos_rt_data, neg_rt_data = [], []
+            for rt in pos_msx_data:
+                pos_rt_data.append(go.Bar(
+                    x=[''],
+                    y=[data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                                 first_action][sec_action][rt]],
+                    name=rt,
+                    marker={'color': reward_colors[rt]}
+                ))
+            for rt in neg_msx_data:
+                neg_rt_data.append(go.Bar(
+                    x=[''],
+                    y=[data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                                 first_action][sec_action][rt]],
+                    name=rt,
+                    marker={'color': reward_colors[rt]}
+                ))
+            pos_rt_data.sort(key=lambda x: x['y'][0], reverse=True)
+            neg_rt_data.sort(key=lambda x: x['y'][0], reverse=True)
 
-            figure = {
-                'data': rt_data,
-                'layout': {
-                    'title': solver,
-                    'showlegend': True
-                }
-            }
-            return figure
+            fig = tools.make_subplots(rows=1, cols=2, subplot_titles=('+ve', '-ve'), shared_yaxes=True)
+            for _rt_data in pos_rt_data:
+                fig.append_trace(_rt_data, 1, 1)
+            for _rt_data in neg_rt_data:
+                fig.append_trace(_rt_data, 1, 2)
+            fig['layout'].update(
+                title=solver,
+                showlegend=True
+            )
+            return fig
 
     return layout
 
@@ -446,17 +461,18 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, r
             'name': solver,
             'line': {'color': solver_colors[solver]}
         }
-        q_val_dev_trace = {
-            'x': [_ + 1 for _ in range(len(q_val_dev_data[solver]))],
-            'y': q_val_dev_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        if solver in q_val_dev_data:
+            q_val_dev_trace = {
+                'x': [_ + 1 for _ in range(len(q_val_dev_data[solver]))],
+                'y': q_val_dev_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            q_val_dev_traces.append(q_val_dev_trace)
         train_traces.append(train_trace)
         run_mean_traces.append(run_mean_trace)
-        q_val_dev_traces.append(q_val_dev_trace)
 
     train_graph = html.Div(className='graph_box', children=[
         dcc.Graph(
@@ -465,7 +481,8 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, r
                 'data': train_traces,
                 'layout': {
                     'title': 'Running Score',
-                    'showlegend': True
+                    'showlegend': True,
+                    'showgrid': True
                 }
             }
         )])
@@ -476,7 +493,8 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, r
                 'data': run_mean_traces,
                 'layout': {
                     'title': 'Running Score Mean',
-                    'showlegend': True
+                    'showlegend': True,
+                    'showgrid': True
                 }
             }
         )])
@@ -487,7 +505,8 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, r
                 'data': q_val_dev_traces,
                 'layout': {
                     'title': 'Q value Deviation',
-                    'showlegend': True
+                    'showlegend': True,
+                    'showgrid': True
                 }
             }
         )])

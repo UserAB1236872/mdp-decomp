@@ -5,6 +5,20 @@ from .graphics import visualize_results as vr
 import pickle
 
 
+# Remove this function later on
+# def eval_planner(env, solver):
+#     actions = [[None for _ in range(5)] for x in range(4)]
+#     for state in env.states:
+#         i = int(np.where(state == 1)[0][0])
+#         x, y = (int(i / 5), i - int(i / 5) * 5)
+#         if x==3 and y==4:
+#             print('Hel')
+#         action, action_info = solver.act(state, debug=True)
+#         actions[x][y] = env.action_meanings[action][0]
+#     for row in actions:
+#         print(row)
+
+
 def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
     result = 0
     for ep in range(eps):
@@ -13,7 +27,7 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
         done = False
         while not done:
             if render:
-                env.render()
+                print(env.render())
             action, action_info = solver.act(state, debug=True)
             state, reward, done, info = env.step(action)
             if verbose:
@@ -40,12 +54,12 @@ def calculate_q_val_dev(env, source, target):
         for a in range(env.action_space.n):
             _, source_action_info = source.act(state, debug=True)
             _, target_action_info = target.act(state, debug=True)
-            source_q , target_q = source_action_info['q_values'],target_action_info['q_values']
+            source_q, target_q = source_action_info['q_values'], target_action_info['q_values']
             for rt in range(len(source_q)):
                 for a in source_q[rt].keys():
                     _dev += abs(source_q[rt][a] - target_q[rt][a])
         dev_data.append(_dev)
-    return round(sum(dev_data),2)
+    return round(np.average(dev_data), 2)
 
 
 def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, result_path, planner=None):
@@ -64,11 +78,13 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             'best_test': {type(solver()).__name__: -float('inf') for solver in solvers_fn},
             'q_val_dev': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn}}
 
+    planner_path = os.path.join(result_path, type(planner).__name__ + '.p')
     # get optimal policy using the planner
     if planner is not None:
-        planner.train()
-        planner.save(os.path.join(result_path, type(planner).__name__ + '.p'))
-        print(test(env, planner, eval_eps, eps_max_steps))
+        planner.train(verbose=True)
+        planner.save(planner_path)
+        print("Q Iteration Performance: ", test(env, planner, eval_eps, eps_max_steps,render=False,verbose=False))
+        # print("Q Iteration Performance: ", eval_planner(env, planner))
 
     env.seed(0)
     for run in range(runs):
@@ -112,7 +128,8 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             solver_name = type(solver).__name__
             _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
             _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
-            _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run + 1], axis=0)
+            if planner is not None:
+                _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run + 1], axis=0)
         _data = {'data': _test_data, 'run_mean': _test_run_mean, 'q_val_dev': _q_val_dev_data, 'runs': runs}
         pickle.dump(_data, open(os.path.join(result_path, 'train_data.p'), 'wb'))
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
