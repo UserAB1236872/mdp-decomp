@@ -35,11 +35,12 @@ class _Base:
                             msx[a][a_dash][1].append(rt)
                         else:
                             pos_rdx.append((rdx[a][a_dash][rt], rt))
-
-                    neg_rdx_sum = sum(v for v, rt in neg_rdx)
                     pos_rdx = sorted(pos_rdx, reverse=True)
 
-                    if len(neg_rdx) > 0:
+                    neg_rdx_sum = sum(v for v, rt in neg_rdx)
+                    pos_rdx_sum = sum(v for v, rt in pos_rdx)
+
+                    if len(neg_rdx) > 0 and (pos_rdx_sum >= abs(neg_rdx_sum)):
                         msx_sum = 0
                         for v, rt in pos_rdx:
                             msx_sum += v
@@ -72,7 +73,6 @@ class _BaseTablePlanner(_Base):
 
     def __init__(self, env, discount, threshold=0.001):
         """
-
         :param env: instance of the environment
         :param discount: discount for future rewards
         :param threshold:
@@ -80,6 +80,7 @@ class _BaseTablePlanner(_Base):
         super().__init__(env)
         self.state_space = env.states
         self.transition_prob_fn = env.transition_prob
+        self.is_terminal = env.is_terminal
         self.reward_fn = env.reward
         self.threshold = threshold
         self.discount = discount
