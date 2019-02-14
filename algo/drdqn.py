@@ -4,6 +4,8 @@ from torch.nn import MSELoss
 from torch.autograd import Variable
 from ._base import _BaseDeepLearner
 
+import logging
+
 
 class DRDQN(_BaseDeepLearner):
     """ DQN for Decomposed Rewards"""
@@ -14,7 +16,7 @@ class DRDQN(_BaseDeepLearner):
         self.batch_size = batch_size
         self.memory = ReplayMemory(mem_len)
 
-    def _update(self, state, action, next_state, reward, done):
+    def update(self, state, action, next_state, reward, done):
         self.memory.push(state, action, next_state, reward, done)
 
         if len(self.memory) >= self.batch_size:
@@ -32,7 +34,8 @@ class DRDQN(_BaseDeepLearner):
             policy_next_qs = None
             for rt, _ in enumerate(self.reward_types):
                 next_r_qs = self.model(non_final_next_state_batch, rt)
-                policy_next_qs = next_r_qs + (policy_next_qs if policy_next_qs is not None else 0)
+                policy_next_qs = next_r_qs + \
+                    (policy_next_qs if policy_next_qs is not None else 0)
             policy_next_actions = policy_next_qs.max(1)[1].unsqueeze(1)
 
             # calculate loss for each reward type
@@ -41,8 +44,10 @@ class DRDQN(_BaseDeepLearner):
                 state = Variable(state_batch.data.clone(), requires_grad=True)
                 predicted_q = self.model(state, rt).gather(1, action_batch)
                 reward = reward_batch[:, rt].unsqueeze(1)
-                target_q = Variable(torch.zeros(predicted_q.shape), requires_grad=False)
-                target_q[non_final_mask] = self.model(non_final_next_state_batch, rt).gather(1, policy_next_actions)
+                target_q = Variable(torch.zeros(
+                    predicted_q.shape), requires_grad=False)
+                target_q[non_final_mask] = self.model(
+                    non_final_next_state_batch, rt).gather(1, policy_next_actions)
                 target_q = reward + self.discount * target_q
                 loss += MSELoss()(predicted_q, target_q)
 
@@ -51,16 +56,3 @@ class DRDQN(_BaseDeepLearner):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
             self.optimizer.step()
-
-    def train(self, episodes):
-        for ep in range(episodes):
-            done = False
-            state = self.env.reset()
-            while not done:
-                action = self._select_action(state)
-                next_state, _, done, info = self.env.step(action)
-                reward = [info['reward_decomposition'][k] for k in self.reward_types]
-                self._update(state, action, next_state, reward, done)
-                state = next_state
-
-            self.linear_decay.update()

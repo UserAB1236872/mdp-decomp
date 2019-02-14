@@ -4,6 +4,8 @@ from .graphics import plot
 from .graphics import visualize_results as vr
 import pickle
 
+import logging
+
 
 # Remove this function later on
 # def eval_planner(env, solver):
@@ -22,6 +24,7 @@ import pickle
 def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
     result = 0
     for ep in range(eps):
+        logging.info("Ep %d of %d done (train)" % (ep, eps))
         ep_reward, ep_steps = 0, 0
         state = env.reset()
         done = False
@@ -37,9 +40,11 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
                                                              np.round(q_values, 2)),
                                                             axis=1)))
                 print('greedy action:{},\n Q-Values:{}\n Decomposed q_values: \n{}'.format(action,
-                                                                                           np.round(q_values.sum(0), 2),
+                                                                                           np.round(
+                                                                                               q_values.sum(0), 2),
                                                                                            formated_q))
-                print('Reward: {} \n Reward Decomposition: {}\n\n'.format(reward, info['reward_decomposition']))
+                print('Reward: {} \n Reward Decomposition: {}\n\n'.format(
+                    reward, info['reward_decomposition']))
             ep_reward += reward
             ep_steps += 1
             done = done if ep_steps <= eps_max_steps else True
@@ -83,7 +88,8 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
     if planner is not None:
         planner.train(verbose=True)
         planner.save(planner_path)
-        print("Q Iteration Performance: ", test(env, planner, eval_eps, eps_max_steps,render=False,verbose=False))
+        print("Q Iteration Performance: ", test(env, planner,
+                                                eval_eps, eps_max_steps, render=False, verbose=False))
         # print("Q Iteration Performance: ", eval_planner(env, planner))
 
     env.seed(0)
@@ -93,7 +99,8 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
 
         curr_eps = 0
         while curr_eps < max_eps:
-
+            logging.info("Run %d / %d, ep %d / %d" %
+                         (run, runs, curr_eps, max_eps))
             # train each solver
             for solver in solvers:
                 solver.train(episodes=interval)
@@ -111,7 +118,8 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                 else:
                     n = len(info['test_run_mean'][solver_name][run])
                     m = info['test_run_mean'][solver_name][run][-1]
-                    info['test_run_mean'][solver_name][run].append(((n * m + perf) / (n + 1)))
+                    info['test_run_mean'][solver_name][run].append(
+                        ((n * m + perf) / (n + 1)))
 
                 if info['test'][solver_name][run][-1] >= info['best_test'][solver_name]:
                     solver.save(os.path.join(result_path, solver_name + '.p'))
@@ -126,12 +134,17 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
         _q_val_dev_data = {}
         for solver in solvers:
             solver_name = type(solver).__name__
-            _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
-            _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
+            _test_data[solver_name] = np.average(
+                info['test'][solver_name][:run + 1], axis=0)
+            _test_run_mean[solver_name] = np.average(
+                info['test_run_mean'][solver_name][:run + 1], axis=0)
             if planner is not None:
-                _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run + 1], axis=0)
-        _data = {'data': _test_data, 'run_mean': _test_run_mean, 'q_val_dev': _q_val_dev_data, 'runs': runs}
-        pickle.dump(_data, open(os.path.join(result_path, 'train_data.p'), 'wb'))
+                _q_val_dev_data[solver_name] = np.average(
+                    info['q_val_dev'][solver_name][:run + 1], axis=0)
+        _data = {'data': _test_data, 'run_mean': _test_run_mean,
+                 'q_val_dev': _q_val_dev_data, 'runs': runs}
+        pickle.dump(_data, open(os.path.join(
+            result_path, 'train_data.p'), 'wb'))
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
 
@@ -198,7 +211,8 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
             solver_data.append({'data': ep_data, 'score': ep_reward})
         data[base_solver_name] = solver_data
 
-    _data = {'data': data, 'reward_types': sorted(env.reward_types), 'actions': env.action_meanings}
+    _data = {'data': data, 'reward_types': sorted(
+        env.reward_types), 'actions': env.action_meanings}
     pickle.dump(_data, open(os.path.join(result_path, 'x_data.p'), 'wb'))
 
 

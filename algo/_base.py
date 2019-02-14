@@ -5,6 +5,8 @@ import numpy as np
 from .utils import _LinearDecay
 from torch.optim import SGD
 
+import logging
+
 
 class _Base:
     """ Base Class for Decomposed Reward Algorithms with expandability"""
@@ -29,7 +31,8 @@ class _Base:
                     pos_rdx, neg_rdx = [], []
 
                     for rt_i, rt in enumerate(self.reward_types):
-                        rdx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
+                        rdx[a][a_dash][rt] = q_values[rt_i][a] - \
+                            q_values[rt_i][a_dash]
                         if rdx[a][a_dash][rt] < 0:
                             neg_rdx.append((rdx[a][a_dash][rt], rt))
                             msx[a][a_dash][1].append(rt)
@@ -129,7 +132,11 @@ class _BaseLearner(_Base):
         self.discount = discount
         self.linear_decay = _LinearDecay(min_eps, max_eps, total_episodes)
 
-    def _select_action(self, state):
+    def update(self, state, action, next_state, reward, done):
+        """ Update internal model """
+        raise NotImplementedError
+
+    def select_action(self, state):
         """ selects epsilon greedy action for the state"""
         if self.linear_decay.eps > random.random():
             return random.choice(range(self.actions))
@@ -156,7 +163,8 @@ class _BaseTableLearner(_BaseLearner):
         action_q_values = [sum([self.q_values[state][r_i][a] for r_i, _ in enumerate(self.reward_types)])
                            for a in range(self.actions)]
         action = int(np.argmax(action_q_values))
-        q_values = [self.q_values[state][r_i] for r_i in range(len(self.reward_types))]
+        q_values = [self.q_values[state][r_i]
+                    for r_i in range(len(self.reward_types))]
 
         if not debug:
             return action
@@ -180,13 +188,16 @@ class _BaseDeepLearner(_BaseLearner):
         self.target_model = model
         self.optimizer = SGD(self.model.parameters(), lr=self.lr)
 
+        self.max_fails = kwargs['max_fails'] if 'max_fails' in kwargs else 20
+
     def act(self, state, debug=False):
         """ returns greedy action"""
         state = torch.FloatTensor(state).unsqueeze(0)
         q_values = None
         for rt, _ in enumerate(self.reward_types):
             rt_q_value = self.model(state, rt)
-            q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
+            q_values = torch.cat((q_values, rt_q_value)
+                                 ) if q_values is not None else rt_q_value
         action = int(q_values.sum(0).max(0)[1].data.numpy())
         q_values = q_values.data.numpy().tolist()
 
@@ -202,3 +213,34 @@ class _BaseDeepLearner(_BaseLearner):
 
     def restore(self, path):
         self.model.load_state_dict(torch.load(path))
+
+    def train(self, episodes):
+        ep = 0
+        fails = 0
+        while ep < episodes:
+            logging.info("Ep %d / %d for %s" %
+                         (ep, episodes, type(self).__name__))
+            try:
+                done = False
+                state = self.env.reset()
+                while not done:
+                    action = self.select_action(state)
+                    next_state, _, done, info = self.env.step(action)
+                    reward = [info['reward_decomposition'][rt]
+                              for rt in self.reward_types]
+                    self.update(state, action, next_state, reward, done)
+                    state = next_state
+
+                self.linear_decay.update()
+                ep += 1
+                fails = 0
+            except Exception as e:
+                fails += 1
+                if fails >= self.max_fails:
+                    import os
+                    logging.fatal("Fatal at episode %d, reched max fail count (%d) with error %s" % (
+                        ep, self.max_fails, e))
+                    os.exit()
+                else:
+                    logging.error(
+                        "Error at episode %d, retrying %d / %d; error %s" % (ep, fails, self.max_fails, e))

@@ -36,8 +36,10 @@ class HRA(_BaseDeepLearner):
                 state = Variable(state_batch.data.clone(), requires_grad=True)
                 predicted_q = self.model(state, rt).gather(1, action_batch)
                 reward = reward_batch[:, rt].unsqueeze(1)
-                target_q = Variable(torch.zeros(predicted_q.shape), requires_grad=False)
-                target_q[non_final_mask] = self.model(non_final_next_state_batch, rt).max(1)[0].detach().unsqueeze(1)
+                target_q = Variable(torch.zeros(
+                    predicted_q.shape), requires_grad=False)
+                target_q[non_final_mask] = self.model(non_final_next_state_batch, rt).max(1)[
+                    0].detach().unsqueeze(1)
                 target_q = reward + self.discount * target_q
                 loss += MSELoss()(predicted_q, target_q)
 
@@ -46,16 +48,3 @@ class HRA(_BaseDeepLearner):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
             self.optimizer.step()
-
-    def train(self, episodes):
-        for ep in range(episodes):
-            done = False
-            state = self.env.reset()
-            while not done:
-                action = self._select_action(state)
-                next_state, _, done, info = self.env.step(action)
-                reward = [info['reward_decomposition'][rt] for rt in self.reward_types]
-                self.update(state, action, next_state, reward, done)
-                state = next_state
-
-            self.linear_decay.update()

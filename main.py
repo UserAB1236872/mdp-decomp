@@ -1,6 +1,7 @@
 import argparse
 import os
-import gym, gym_decomp
+import gym
+import gym_decomp
 import torch
 import monitor
 import torch.nn as nn
@@ -25,22 +26,35 @@ class DRModel(nn.Module):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--env', default='Cliffworld-v0', help='Name of the environment')
+    parser.add_argument('--env', default='Cliffworld-v0',
+                        help='Name of the environment')
     parser.add_argument('--result_dir', default=os.path.join(os.getcwd(), 'results'),
                         help="Directory Path to store results")
-    parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
+    parser.add_argument('--no_cuda', action='store_true',
+                        default=False, help='no cuda usage')
     parser.add_argument('--lr', type=float, default=0.01, help='Learning rate')
-    parser.add_argument('--min_eps', type=float, default=0.1, help='Min Epsilon for Exploration')
-    parser.add_argument('--max_eps', type=float, default=0.9, help='Max. Epsilon for Exploration')
-    parser.add_argument('--total_episodes', type=int, default=20000, help='Total Number of episodes for training')
-    parser.add_argument('--eval_episodes', type=int, default=5, help='Number of episodes for evaluation/interval')
-    parser.add_argument('--train_interval', type=int, default=100, help='No. of Episodes per training interval')
-    parser.add_argument('--runs', type=int, default=1, help='Experiment Repetition Count')
-    parser.add_argument('--discount', type=float, default=0.9, help=' Discount')
-    parser.add_argument('--mem_len', type=float, default=10000, help=' Size of Experience Replay Memory')
-    parser.add_argument('--batch_size', type=float, default=32, help=' Batch size ')
-    parser.add_argument('--episode_max_steps', type=float, default=50, help='Maximum Number of steps in an episode')
-    parser.add_argument('--train', action='store_true', default=False, help=' Trains all the solvers for given env.')
+    parser.add_argument('--min_eps', type=float, default=0.1,
+                        help='Min Epsilon for Exploration')
+    parser.add_argument('--max_eps', type=float, default=0.9,
+                        help='Max. Epsilon for Exploration')
+    parser.add_argument('--total_episodes', type=int, default=20000,
+                        help='Total Number of episodes for training')
+    parser.add_argument('--eval_episodes', type=int, default=5,
+                        help='Number of episodes for evaluation/interval')
+    parser.add_argument('--train_interval', type=int, default=100,
+                        help='No. of Episodes per training interval')
+    parser.add_argument('--runs', type=int, default=1,
+                        help='Experiment Repetition Count')
+    parser.add_argument('--discount', type=float,
+                        default=0.9, help=' Discount')
+    parser.add_argument('--mem_len', type=float, default=10000,
+                        help=' Size of Experience Replay Memory')
+    parser.add_argument('--batch_size', type=float,
+                        default=32, help=' Batch size ')
+    parser.add_argument('--episode_max_steps', type=float,
+                        default=50, help='Maximum Number of steps in an episode')
+    parser.add_argument('--train', action='store_true', default=False,
+                        help=' Trains all the solvers for given env.')
     parser.add_argument('--test', action='store_true', default=False,
                         help=' Restores and Tests all the solvers for given env.')
     parser.add_argument('--eval_msx', action='store_true', default=False,
@@ -63,28 +77,32 @@ if __name__ == '__main__':
         os.makedirs(args.env_result_dir)
 
     # initialize environment
-    env_fn = lambda: gym.make(args.env)
+    def env_fn(): return gym.make(args.env)
     env = env_fn()
     state = env.reset()
     actions = env.action_space.n
     reward_types = len(env.reward_types)
 
     # initialize solvers
-    dr_qlearn_fn = lambda: DRQLearn(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
-    dr_sarsa_fn = lambda: DRSarsa(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
+    def dr_qlearn_fn(): return DRQLearn(env_fn(), args.lr, args.discount,
+                                        args.min_eps, args.max_eps, args.total_episodes)
+    def dr_sarsa_fn(): return DRSarsa(env_fn(), args.lr, args.discount,
+                                      args.min_eps, args.max_eps, args.total_episodes)
 
-    model_fn = lambda: DRModel(state.size, actions, reward_types)
-    dr_dqn_solver_fn = lambda: DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                     args.min_eps, args.max_eps, args.total_episodes)
+    def model_fn(): return DRModel(state.size, actions, reward_types)
+    def dr_dqn_solver_fn(): return DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
+                                         args.min_eps, args.max_eps, args.total_episodes)
 
-    dr_dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
-                                           args.batch_size, args.min_eps, args.max_eps, args.total_episodes)
+    def dr_dsarsa_solver_fn(): return DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
+                                               args.batch_size, args.min_eps, args.max_eps, args.total_episodes)
 
-    hra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                args.min_eps, args.max_eps, args.total_episodes)
-    solvers_fn = [dr_qlearn_fn, dr_sarsa_fn, dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
+    def hra_solver_fn(): return HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
+                                    args.min_eps, args.max_eps, args.total_episodes)
+    solvers_fn = [dr_qlearn_fn, dr_sarsa_fn,
+                  dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
 
-    planner = DRQIteration(env_fn(), args.discount) if args.use_planner else None
+    planner = DRQIteration(
+        env_fn(), args.discount) if args.use_planner else None
     # Fire it up!
     if args.train:
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
@@ -94,7 +112,10 @@ if __name__ == '__main__':
                               result_path=args.env_result_dir)
         print(result)
     if args.eval_msx:
-        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn(), dr_dqn_solver_fn()]
-        monitor.eval_msx(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, result_path=args.env_result_dir)
+        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(),
+                   hra_solver_fn(), dr_dqn_solver_fn()]
+        monitor.eval_msx(env_fn(), solvers, args.eval_episodes,
+                         args.episode_max_steps, result_path=args.env_result_dir)
     if args.visualize_results:
-        monitor.visualize_results(result_path=args.result_dir, port=args.port, host=args.host)
+        monitor.visualize_results(
+            result_path=args.result_dir, port=args.port, host=args.host)
