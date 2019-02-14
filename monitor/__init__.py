@@ -20,7 +20,7 @@ import pickle
 
 
 def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
-    result = 0
+    result = []
     for ep in range(eps):
         ep_reward, ep_steps = 0, 0
         state = env.reset()
@@ -43,26 +43,28 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
             ep_reward += reward
             ep_steps += 1
             done = done if ep_steps <= eps_max_steps else True
-        result += ep_reward
-    return result / eps
+        result.append(ep_reward)
+    return result
 
 
 def calculate_q_val_dev(env, source, target):
     dev_data = []
     for state in env.states:
-        _dev = 0
+        _dev = []
         for a in range(env.action_space.n):
             _, source_action_info = source.act(state, debug=True)
             _, target_action_info = target.act(state, debug=True)
             source_q, target_q = source_action_info['q_values'], target_action_info['q_values']
             for rt in range(len(source_q)):
                 for a in source_q[rt].keys():
-                    _dev += abs(source_q[rt][a] - target_q[rt][a])
-        dev_data.append(_dev)
+                    # _dev.append(abs(source_q[rt][a] - target_q[rt][a]) / (abs(source_q[rt][a]) + 0.001)) # to prevent div by 0
+                    _dev.append(abs(source_q[rt][a] - target_q[rt][a])) # to prevent div by 0
+        # dev_data.append(round(np.average(_dev),2)*100)  # *100 bcz %age
+        dev_data.append(round(np.average(_dev),2))  # *100 bcz %age
     return round(np.average(dev_data), 2)
 
 
-def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, result_path, planner=None):
+def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, result_path, planner_fn=None):
     """
     :param env_fn: creates an instance of the environment
     :param solvers: list of solvers
@@ -76,14 +78,17 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
     info = {'test': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
             'test_run_mean': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
             'best_test': {type(solver()).__name__: -float('inf') for solver in solvers_fn},
-            'q_val_dev': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn}}
+            'q_val_dev': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'policy_eval': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn}}
 
-    planner_path = os.path.join(result_path, type(planner).__name__ + '.p')
     # get optimal policy using the planner
-    if planner is not None:
-        planner.train(verbose=True)
+    if planner_fn is not None:
+        planner = planner_fn()
+        planner_path = os.path.join(result_path, type(planner).__name__ + '.p')
+        planner.train(verbose=False)
         planner.save(planner_path)
-        print("Q Iteration Performance: ", test(env, planner, eval_eps, eps_max_steps,render=False,verbose=False))
+        print("Q Iteration Performance: ",
+              np.average(test(env, planner, eval_eps, eps_max_steps, render=False, verbose=False)))
         # print("Q Iteration Performance: ", eval_planner(env, planner))
 
     env.seed(0)
@@ -101,10 +106,16 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             # evaluate each solver
             for solver in solvers:
                 solver_name = type(solver).__name__
-                perf = test(env, solver, eval_eps, eps_max_steps)
-                if planner is not None:
+                perf = np.average(test(env, solver, eval_eps, eps_max_steps))
+                if planner_fn is not None:
                     dev = calculate_q_val_dev(env, planner, solver)
                     info['q_val_dev'][solver_name][run].append(dev)
+
+                    eval_planner = planner_fn()
+                    eval_planner.policy_evaluation(policy=solver.act, verbose=False)
+                    dev = calculate_q_val_dev(env, eval_planner, solver)
+                    info['policy_eval'][solver_name][run].append(dev)
+
                 info['test'][solver_name][run].append(perf)
                 if len(info['test_run_mean'][solver_name][run]) == 0:
                     info['test_run_mean'][solver_name][run].append(perf)
@@ -123,14 +134,16 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             curr_eps += interval
 
         _test_data, _test_run_mean = {}, {}
-        _q_val_dev_data = {}
+        _q_val_dev_data, _policy_eval_data = {}, {}
         for solver in solvers:
             solver_name = type(solver).__name__
             _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
             _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
             if planner is not None:
                 _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run + 1], axis=0)
-        _data = {'data': _test_data, 'run_mean': _test_run_mean, 'q_val_dev': _q_val_dev_data, 'runs': runs}
+                _policy_eval_data[solver_name] = np.average(info['policy_eval'][solver_name][:run + 1], axis=0)
+        _data = {'data': _test_data, 'run_mean': _test_run_mean, 'q_val_dev': _q_val_dev_data,
+                 'policy_eval': _policy_eval_data, 'runs': runs}
         pickle.dump(_data, open(os.path.join(result_path, 'train_data.p'), 'wb'))
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
@@ -144,12 +157,8 @@ def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False):
         solver_name = type(solver).__name__
         solver.restore(os.path.join(result_path, solver_name + '.p'))
         perf = test(env, solver, eval_eps, eps_max_steps, render)
-
-        if solver_name in data:
-            data[solver_name].append(perf)
-        else:
-            data[solver_name] = [perf]
-
+        data[solver_name] = perf
+    pickle.dump(data, open(os.path.join(result_path, 'test_data.p'), 'wb'))
     data = {k: np.average(v) for k, v in data.items()}
 
     return data

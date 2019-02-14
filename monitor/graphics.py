@@ -441,9 +441,9 @@ def x_layout(app, data, reward_types, actions, prefix):
     return layout
 
 
-def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, runs=1, prefix=''):
+def train_page_layout(app, train_data, run_mean_data, q_val_dev_data,policy_eval_data,test_data, solvers, runs=1, prefix=''):
     solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(solvers)}
-    train_traces, run_mean_traces, q_val_dev_traces = [], [], []
+    train_traces, run_mean_traces, q_val_dev_traces,policy_eval_traces,best_policy_test_data = [], [], [],[],[]
     for solver in solvers:
         train_trace = {
             'x': [_ + 1 for _ in range(len(train_data[solver]))],
@@ -471,6 +471,26 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, r
                 'line': {'color': solver_colors[solver]}
             }
             q_val_dev_traces.append(q_val_dev_trace)
+        if solver in policy_eval_data:
+            policy_eval_trace = {
+                'x': [_ + 1 for _ in range(len(policy_eval_data[solver]))],
+                'y': policy_eval_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            policy_eval_traces.append(policy_eval_trace)
+        if solver in test_data:
+            best_policy_trace = {
+                'x': [_ + 1 for _ in range(len(test_data[solver]))],
+                'y': test_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            best_policy_test_data.append(best_policy_trace)
         train_traces.append(train_trace)
         run_mean_traces.append(run_mean_trace)
 
@@ -510,9 +530,33 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, solvers, r
                 }
             }
         )])
-
+    policy_eval_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-policy_eval',
+            figure={
+                'data': policy_eval_traces,
+                'layout': {
+                    'title': 'Policy Evaluation Deviation',
+                    'showlegend': True,
+                    'showgrid': True
+                }
+            }
+        )])
+    best_policy_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-best_policy',
+            figure={
+                'data': best_policy_test_data,
+                'layout': {
+                    'title': 'Evaluation of Best Policy',
+                    'showlegend': True,
+                    'showgrid': True
+                }
+            }
+        )])
     info_box = html.Div(children='Runs:' + str(runs))
-    layout = html.Div(children=[train_graph, run_mean_graph, q_val_dev_graph, info_box])
+    layout = html.Div(children=[train_graph, run_mean_graph, q_val_dev_graph,policy_eval_graph,
+                                best_policy_graph, info_box])
     return layout
 
 
@@ -530,15 +574,18 @@ def visualize_results(result_path, host, port):
         layouts[env] = {}
         x_path = os.path.join(env_path, 'x_data.p')
         train_path = os.path.join(env_path, 'train_data.p')
+        test_path = os.path.join(env_path, 'test_data.p')
 
         if os.path.exists(train_path):
             prefix = env.lower() + '_training'
             _path = '/' + prefix
             train_page = dcc.Link(env + ': Training ', href=_path)
             train_data = pickle.load(open(train_path, 'rb'))
+            test_data = pickle.load(open(test_path,'rb')) if os.path.exists(test_path) else None
             layouts[_path] = train_page_layout(app, train_data['data'], train_data['run_mean'],
-                                               train_data['q_val_dev'], train_data['data'].keys(),
-                                               runs=train_data['runs'], prefix=prefix)
+                                               train_data['q_val_dev'],train_data['policy_eval'],
+                                               test_data,
+                                               solvers=train_data['data'].keys(),runs=train_data['runs'], prefix=prefix)
             index_children.append(train_page)
             index_children.append(html.Br())
 
