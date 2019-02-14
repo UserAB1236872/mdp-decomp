@@ -3,21 +3,28 @@ import numpy as np
 from .graphics import plot
 from .graphics import visualize_results as vr
 import pickle
-
+from math import log, floor
 
 # Remove this function later on
-# def eval_planner(env, solver):
+# def evaluate_planner(env, solver):
 #     actions = [[None for _ in range(5)] for x in range(4)]
 #     for state in env.states:
 #         i = int(np.where(state == 1)[0][0])
 #         x, y = (int(i / 5), i - int(i / 5) * 5)
-#         if x==3 and y==4:
+#         if x == 3 and y == 4:
 #             print('Hel')
 #         action, action_info = solver.act(state, debug=True)
 #         actions[x][y] = env.action_meanings[action][0]
 #     for row in actions:
 #         print(row)
 
+def human_format(num):
+    num = float('{:.3g}'.format(num))
+    magnitude = 0
+    while abs(num) >= 1000:
+        magnitude += 1
+        num /= 1000.0
+    return '{}{}'.format('{:f}'.format(num).rstrip('0').rstrip('.'), ['', 'K', 'M', 'B', 'T'][magnitude])
 
 def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
     result = []
@@ -58,9 +65,9 @@ def calculate_q_val_dev(env, source, target):
             for rt in range(len(source_q)):
                 for a in source_q[rt].keys():
                     # _dev.append(abs(source_q[rt][a] - target_q[rt][a]) / (abs(source_q[rt][a]) + 0.001)) # to prevent div by 0
-                    _dev.append(abs(source_q[rt][a] - target_q[rt][a])) # to prevent div by 0
+                    _dev.append(abs(source_q[rt][a] - target_q[rt][a]))  # to prevent div by 0
         # dev_data.append(round(np.average(_dev),2)*100)  # *100 bcz %age
-        dev_data.append(round(np.average(_dev),2))  # *100 bcz %age
+        dev_data.append(round(np.average(_dev), 2))  # *100 bcz %age
     return round(np.average(dev_data), 2)
 
 
@@ -89,7 +96,7 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
         planner.save(planner_path)
         print("Q Iteration Performance: ",
               np.average(test(env, planner, eval_eps, eps_max_steps, render=False, verbose=False)))
-        # print("Q Iteration Performance: ", eval_planner(env, planner))
+        # print("Q Iteration Performance: ", evaluate_planner(env, planner))
 
     env.seed(0)
     for run in range(runs):
@@ -139,7 +146,7 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             solver_name = type(solver).__name__
             _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
             _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
-            if planner is not None:
+            if planner_fn is not None:
                 _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run + 1], axis=0)
                 _policy_eval_data[solver_name] = np.average(info['policy_eval'][solver_name][:run + 1], axis=0)
         _data = {'data': _test_data, 'run_mean': _test_run_mean, 'q_val_dev': _q_val_dev_data,
@@ -156,7 +163,7 @@ def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False):
         env.seed(0)
         solver_name = type(solver).__name__
         solver.restore(os.path.join(result_path, solver_name + '.p'))
-        perf = test(env, solver, eval_eps, eps_max_steps, render)
+        perf = np.average(test(env, solver, eval_eps, eps_max_steps, render))
         data[solver_name] = perf
     pickle.dump(data, open(os.path.join(result_path, 'test_data.p'), 'wb'))
     data = {k: np.average(v) for k, v in data.items()}
@@ -204,7 +211,7 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
                     state_info['solvers'][solver_name]['action'] = _action
                 ep_data.append(state_info)
 
-            solver_data.append({'data': ep_data, 'score': ep_reward})
+            solver_data.append({'data': ep_data, 'score': human_format(ep_reward)})
         data[base_solver_name] = solver_data
 
     _data = {'data': data, 'reward_types': sorted(env.reward_types), 'actions': env.action_meanings}

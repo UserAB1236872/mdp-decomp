@@ -15,10 +15,9 @@ class DRModel(nn.Module):
         self.state_size = state_size
 
         for rt in range(reward_types):
-            model = nn.Sequential(nn.Linear(state_size, 128, bias=False),
-                                  nn.Linear(128, actions, bias=False))
+            model = nn.Sequential(nn.Linear(state_size, 128),
+                                  nn.Linear(128, actions))
             setattr(self, 'model_{}'.format(rt), model)
-            # getattr(self, 'model_{}'.format(rt)).weight.data.fill_(0)
 
     def forward(self, input, r_type):
         return getattr(self, 'model_{}'.format(r_type))(input)
@@ -71,19 +70,17 @@ if __name__ == '__main__':
     reward_types = len(env.reward_types)
 
     # initialize solvers
-    dr_qlearn_fn = lambda: DRQLearn(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
-    dr_sarsa_fn = lambda: DRSarsa(env_fn(), args.lr, args.discount, args.min_eps, args.max_eps, args.total_episodes)
 
     model_fn = lambda: DRModel(state.size, actions, reward_types)
     dr_dqn_solver_fn = lambda: DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                     args.min_eps, args.max_eps, args.total_episodes)
+                                     args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
 
     dr_dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
-                                           args.batch_size, args.min_eps, args.max_eps, args.total_episodes)
+                                           args.batch_size, args.min_eps, args.max_eps, args.total_episodes,
+                                           use_cuda=args.cuda)
 
     hra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                args.min_eps, args.max_eps, args.total_episodes)
-    # solvers_fn = [dr_qlearn_fn, dr_sarsa_fn, dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
+                                args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
     solvers_fn = [dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
 
     # Fire it up!
@@ -96,7 +93,7 @@ if __name__ == '__main__':
                               result_path=args.env_result_dir)
         print(result)
     if args.eval_msx:
-        solvers = [dr_qlearn_fn(), dr_sarsa_fn(), dr_dsarsa_solver_fn(), hra_solver_fn(), dr_dqn_solver_fn()]
+        solvers = [dr_dsarsa_solver_fn(), hra_solver_fn(), dr_dqn_solver_fn()]
         monitor.eval_msx(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, result_path=args.env_result_dir)
     if args.visualize_results:
         monitor.visualize_results(result_path=args.result_dir, port=args.port, host=args.host)

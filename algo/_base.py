@@ -173,22 +173,32 @@ class _BaseTableLearner(_BaseLearner):
 
 
 class _BaseDeepLearner(_BaseLearner):
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model, update_target_interval, use_cuda, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.model = model
         self.target_model = model
+        self.update_target_interval = update_target_interval
+        self.use_cuda = use_cuda
+
+        if self.use_cuda:
+            self.model = self.model.cuda()
+            self.target_model = self.target_model.cuda()
+
         self.optimizer = SGD(self.model.parameters(), lr=self.lr)
 
     def act(self, state, debug=False):
         """ returns greedy action"""
         state = torch.FloatTensor(state).unsqueeze(0)
+        if self.use_cuda:
+            state = state.cuda()
+
         q_values = None
         for rt, _ in enumerate(self.reward_types):
             rt_q_value = self.model(state, rt)
             q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
-        action = int(q_values.sum(0).max(0)[1].data.numpy())
-        q_values = q_values.data.numpy().tolist()
+        action = int(q_values.sum(0).max(0)[1].data.cpu().numpy())
+        q_values = q_values.data.cpu().numpy().tolist()
 
         if not debug:
             return action
@@ -196,6 +206,10 @@ class _BaseDeepLearner(_BaseLearner):
             rdx, msx = self._get_explanation(q_values)
             info = {'msx': msx, 'rdx': rdx, 'q_values': q_values}
             return action, info
+
+    def update_target_model(self):
+        """ updates weights of the target network with the model weights"""
+        self.target_model.load_state_dict(self.model.state_dict())
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)

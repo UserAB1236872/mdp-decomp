@@ -15,6 +15,7 @@ from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
 from plotly import tools
 import pickle
+import numpy as np
 
 
 def plot(perf_data, run_mean_data, file_path):
@@ -203,7 +204,7 @@ def x_layout(app, data, reward_types, actions, prefix):
     graph_area = html.Div(className='graph_area', style=graph_area_style,
                           children=[q_value_wrapper, greedy_action_wrapper, decomp_q_value_wrapper, action_pair_wrapper,
                                     rdx_wrapper, msx_wrapper])
-    # game_control = html.Div(children=[state_slider_wrap, msx_checkbox], className='game_control')
+
     children = [game_area, graph_area]
     layout = html.Div(children=children)
 
@@ -375,7 +376,7 @@ def x_layout(app, data, reward_types, actions, prefix):
             for rt_i, rt in enumerate(reward_types):
                 rt_data.append({'x': [''],
                                 'y': [data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
-                                        first_action][sec_action][rt]],
+                                          first_action][sec_action][rt]],
                                 'type': 'bar',
                                 'name': rt,
                                 'marker': {'color': reward_colors[rt]}})
@@ -412,7 +413,7 @@ def x_layout(app, data, reward_types, actions, prefix):
                 pos_rt_data.append(go.Bar(
                     x=[''],
                     y=[data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
-                                 first_action][sec_action][rt]],
+                           first_action][sec_action][rt]],
                     name=rt,
                     marker={'color': reward_colors[rt]}
                 ))
@@ -420,7 +421,7 @@ def x_layout(app, data, reward_types, actions, prefix):
                 neg_rt_data.append(go.Bar(
                     x=[''],
                     y=[data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
-                                 first_action][sec_action][rt]],
+                           first_action][sec_action][rt]],
                     name=rt,
                     marker={'color': reward_colors[rt]}
                 ))
@@ -441,10 +442,11 @@ def x_layout(app, data, reward_types, actions, prefix):
     return layout
 
 
-def train_page_layout(app, train_data, run_mean_data, q_val_dev_data,policy_eval_data,test_data, solvers, runs=1, prefix=''):
-    solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(solvers)}
-    train_traces, run_mean_traces, q_val_dev_traces,policy_eval_traces,best_policy_test_data = [], [], [],[],[]
-    for solver in solvers:
+def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, policy_eval_data, test_data, solvers, runs=1,
+                      prefix=''):
+    solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
+    train_traces, run_mean_traces, q_val_dev_traces, policy_eval_traces, best_policy_test_data = [], [], [], [], []
+    for solver in sorted(solvers):
         train_trace = {
             'x': [_ + 1 for _ in range(len(train_data[solver]))],
             'y': train_data[solver],
@@ -454,8 +456,8 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data,policy_eval
             'line': {'color': solver_colors[solver]}
         }
         run_mean_trace = {
-            'x': [_ + 1 for _ in range(len(run_mean_data[solver]))],
-            'y': run_mean_data[solver],
+            'x': [_ + 1 for _ in range(len(train_data[solver]))],
+            'y': [np.average(train_data[solver][max(0, i - 10):i + 1]) for i in range(len(train_data[solver]) - 1)],
             'type': 'scatter',
             'mode': 'lines',
             'name': solver,
@@ -483,12 +485,11 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data,policy_eval
             policy_eval_traces.append(policy_eval_trace)
         if solver in test_data:
             best_policy_trace = {
-                'x': [_ + 1 for _ in range(len(test_data[solver]))],
-                'y': test_data[solver],
-                'type': 'scatter',
-                'mode': 'lines',
+                'x': [''],
+                'y': [test_data[solver]],
+                'type': 'bar',
                 'name': solver,
-                'line': {'color': solver_colors[solver]}
+                'marker': {'color': solver_colors[solver]}
             }
             best_policy_test_data.append(best_policy_trace)
         train_traces.append(train_trace)
@@ -555,7 +556,7 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data,policy_eval
             }
         )])
     info_box = html.Div(children='Runs:' + str(runs))
-    layout = html.Div(children=[train_graph, run_mean_graph, q_val_dev_graph,policy_eval_graph,
+    layout = html.Div(children=[train_graph, run_mean_graph, q_val_dev_graph, policy_eval_graph,
                                 best_policy_graph, info_box])
     return layout
 
@@ -581,11 +582,12 @@ def visualize_results(result_path, host, port):
             _path = '/' + prefix
             train_page = dcc.Link(env + ': Training ', href=_path)
             train_data = pickle.load(open(train_path, 'rb'))
-            test_data = pickle.load(open(test_path,'rb')) if os.path.exists(test_path) else None
+            test_data = pickle.load(open(test_path, 'rb')) if os.path.exists(test_path) else {}
             layouts[_path] = train_page_layout(app, train_data['data'], train_data['run_mean'],
-                                               train_data['q_val_dev'],train_data['policy_eval'],
+                                               train_data['q_val_dev'], train_data['policy_eval'],
                                                test_data,
-                                               solvers=train_data['data'].keys(),runs=train_data['runs'], prefix=prefix)
+                                               solvers=train_data['data'].keys(), runs=train_data['runs'],
+                                               prefix=prefix)
             index_children.append(train_page)
             index_children.append(html.Br())
 
