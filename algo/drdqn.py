@@ -5,6 +5,7 @@ from torch.autograd import Variable
 from ._base import _BaseDeepLearner
 
 import logging
+import pickle
 
 
 class DRDQN(_BaseDeepLearner):
@@ -56,3 +57,16 @@ class DRDQN(_BaseDeepLearner):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
             self.optimizer.step()
+
+    def save(self, path, train_checkpoint=False):
+        """
+        Save the things we need to resume training
+        """
+        if train_checkpoint:
+            pickle.dump(self.memory, open(path+".mem", 'wb'))
+        super().save(path, train_checkpoint=train_checkpoint)
+
+    def restore(self, path, train_checkpoint=False):
+        if train_checkpoint:
+            self.mem = pickle.load(open(path+".mem", 'rb'))
+        super().restore(path, train_checkpoint=train_checkpoint)

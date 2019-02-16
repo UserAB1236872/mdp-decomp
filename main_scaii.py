@@ -51,7 +51,7 @@ if __name__ == '__main__':
                         help='Experiment Repetition Count')
     parser.add_argument('--discount', type=float,
                         default=0.9, help=' Discount')
-    parser.add_argument('--mem_len', type=float, default=5000,
+    parser.add_argument('--mem_len', type=float, default=10000,
                         help=' Size of Experience Replay Memory')
     parser.add_argument('--batch_size', type=float,
                         default=32, help=' Batch size ')
@@ -71,6 +71,10 @@ if __name__ == '__main__':
                         help='hosting port (default:8051)')
     parser.add_argument('--visualize_results', action='store_true', default=False,
                         help=' ')
+    parser.add_argument('--no_hra', action='store_true',
+                        default=False, help="Disables HRA")
+    parser.add_argument('--restore', action='store_true',
+                        default=False, help="Restores the models")
 
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
@@ -95,19 +99,24 @@ if __name__ == '__main__':
 
     def hra_solver_fn(): return HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                     args.min_eps, args.max_eps, args.total_episodes)
-    solvers_fn = [dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
+    solvers_fn = [dr_dqn_solver_fn, dr_dsarsa_solver_fn]
+
+    if not args.no_hra:
+        solvers_fn.append(hra_solver_fn)
 
     # Fire it up!
     if args.train:
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
-                    args.train_interval, result_path=args.env_result_dir)
+                    args.train_interval, result_path=args.env_result_dir, restore=args.restore)
     if args.test:
         result = monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
                               result_path=args.env_result_dir)
         print(result)
     if args.eval_msx:
         solvers = [dr_dsarsa_solver_fn(),
-                   hra_solver_fn(), dr_dqn_solver_fn()]
+                   dr_dqn_solver_fn()]
+        if not args.no_hra:
+            solvers.append(hra_solver_fn)
         monitor.eval_msx(env_fn(), solvers, args.eval_episodes,
                          args.episode_max_steps, result_path=args.env_result_dir)
     if args.visualize_results:

@@ -62,11 +62,11 @@ class _Base:
         """ trains the algorithm for given episodes"""
         raise NotImplementedError
 
-    def save(self, path):
+    def save(self, path, train_checkpoint=False):
         """ save relevant properties in given path"""
         raise NotImplementedError
 
-    def restore(self, path):
+    def restore(self, path, train_checkpoint=False):
         """ save relevant properties from given path"""
         raise NotImplementedError
 
@@ -107,10 +107,10 @@ class _BaseTablePlanner(_Base):
         """ returns greedy action for the state"""
         raise NotImplementedError
 
-    def save(self, path):
+    def save(self, path, train_checkpoint=False):
         pickle.dump(self.q_values, open(path, 'wb'))
 
-    def restore(self, path):
+    def restore(self, path, train_checkpoint=False):
         self.q_values = pickle.load(open(path, 'rb'))
 
 
@@ -173,10 +173,10 @@ class _BaseTableLearner(_BaseLearner):
             info = {'msx': msx, 'rdx': rdx, 'q_values': q_values}
             return action, info
 
-    def save(self, path):
+    def save(self, path, train_checkpoint=False):
         pickle.dump(self.q_values, open(path, 'wb'))
 
-    def restore(self, path):
+    def restore(self, path, train_checkpoint=False):
         self.q_values = pickle.load(open(path, 'rb'))
 
 
@@ -208,11 +208,15 @@ class _BaseDeepLearner(_BaseLearner):
             info = {'msx': msx, 'rdx': rdx, 'q_values': q_values}
             return action, info
 
-    def save(self, path):
+    def save(self, path, train_checkpoint=False):
         torch.save(self.model.state_dict(), path)
+        if train_checkpoint:
+            torch.save(self.optimizer.state_dict(), path + ".opt")
 
-    def restore(self, path):
+    def restore(self, path, train_checkpoint=False):
         self.model.load_state_dict(torch.load(path))
+        if train_checkpoint:
+            self.optimizer.load_state_dict(torch.load(path + ".opt"))
 
     def train(self, episodes):
         ep = 0

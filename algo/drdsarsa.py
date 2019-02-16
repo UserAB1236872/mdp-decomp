@@ -4,6 +4,8 @@ from torch.nn import MSELoss
 from torch.autograd import Variable
 from ._base import _BaseDeepLearner
 
+import pickle
+
 
 class DRDSarsa(_BaseDeepLearner):
     """ Deep Sarsa for Decomposed Rewards"""
@@ -60,3 +62,13 @@ class DRDSarsa(_BaseDeepLearner):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 100)
             self.optimizer.step()
+
+    def save(self, path, train_checkpoint=False):
+        if train_checkpoint:
+            pickle.dump(self.memory, open(path+".mem", 'wb'))
+        super().save(path, train_checkpoint=train_checkpoint)
+
+    def restore(self, path, train_checkpoint=False):
+        if train_checkpoint:
+            self.mem = pickle.load(open(path+".mem", 'rb'))
+        super().restore(path, train_checkpoint=train_checkpoint)

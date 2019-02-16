@@ -5,7 +5,7 @@ from .graphics import visualize_results as vr
 import pickle
 
 import logging
-
+import shutil
 
 # Remove this function later on
 # def eval_planner(env, solver):
@@ -67,7 +67,7 @@ def calculate_q_val_dev(env, source, target):
     return round(np.average(dev_data), 2)
 
 
-def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, result_path, planner=None):
+def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, result_path, planner=None, restore=False):
     """
     :param env_fn: creates an instance of the environment
     :param solvers: list of solvers
@@ -77,6 +77,8 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
     :param result_path: root directory to store results
 
     """
+    checkpoint_path = os.path.join(result_path, "checkpoint")
+    os.makedirs(checkpoint_path, exist_ok=True)
 
     info = {'test': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
             'test_run_mean': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
@@ -92,12 +94,32 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                                                 eval_eps, eps_max_steps, render=False, verbose=False))
         # print("Q Iteration Performance: ", eval_planner(env, planner))
 
+    run = 0
+    just_loaded = False
+    # Restore our training information
+    if restore:
+        just_loaded = True
+        restored_info = pickle.load(
+            open(os.path.join(checkpoint_path, "train_info.p"), 'rb'))
+        info = restored_info['info']
+        run = restored_info['run']
+
     env.seed(0)
-    for run in range(runs):
+    while run < runs:
         # instantiate each solver for the run
         solvers = [solver() for solver in solvers_fn]
 
+        # Load most recent training version of models
+        if restore and just_loaded:
+            for solver in solvers:
+                solver_name = type(solver).__name__
+                solver.restore(os.path.join(
+                    checkpoint_path, 'train_' + solver_name) + '.p', train_checkpoint=True)
+
         curr_eps = 0
+        if restore and just_loaded:
+            curr_eps = restored_info['curr_eps']
+
         while curr_eps < max_eps:
             logging.info("Run %d / %d, ep %d / %d" %
                          (run, runs, curr_eps, max_eps))
@@ -130,6 +152,20 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                                                   sorted(info['test'].keys())]))
             curr_eps += interval
 
+            # Dump training state to disk in case of crashes
+            ser_info = {'info': info, 'run': run, 'curr_eps': curr_eps}
+            pickle.dump(ser_info, open(os.path.join(
+                checkpoint_path, "train_info.p"), 'wb'))
+            for solver in solvers:
+                solver_name = type(solver).__name__
+                solver.save(os.path.join(
+                    checkpoint_path, 'train_' + solver_name) + '.p', train_checkpoint=True)
+
+            just_loaded = False
+        run += 1
+
+        # Cleanup training checkpoints
+        shutil.rmtree(checkpoint_path, ignore_errors=True)
         _test_data, _test_run_mean = {}, {}
         _q_val_dev_data = {}
         for solver in solvers:
