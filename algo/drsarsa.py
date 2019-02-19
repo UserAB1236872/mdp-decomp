@@ -21,13 +21,14 @@ class DRSarsa(_BaseTableLearner):
             done = False
             state = self.env.reset()
             state = self._ensure_state_exists(state)
+            action = self._select_action(state)
             while not done:
-                action = self._select_action(state)
                 next_state, _, done, info = self.env.step(action)
                 reward = [info['reward_decomposition'][k] for k in sorted(info['reward_decomposition'].keys())]
                 next_state = self._ensure_state_exists(next_state)
                 next_action = self._select_action(next_state)
                 self._update(state, action, next_state, next_action, reward, done)
                 state = next_state
+                action = next_action
 
             self.linear_decay.update()
