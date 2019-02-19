@@ -582,6 +582,8 @@ def visualize_results(result_path, host, port):
             _path = '/' + prefix
             train_page = dcc.Link(env + ': Training ', href=_path)
             train_data = pickle.load(open(train_path, 'rb'))
+            if 'policy_eval' not in train_data.keys():
+                train_data['policy_eval'] = {}
             test_data = pickle.load(open(test_path, 'rb')) if os.path.exists(test_path) else {}
             layouts[_path] = train_page_layout(app, train_data['data'], train_data['run_mean'],
                                                train_data['q_val_dev'], train_data['policy_eval'],
