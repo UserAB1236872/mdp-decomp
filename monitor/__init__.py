@@ -3,7 +3,15 @@ import numpy as np
 from .graphics import plot
 from .graphics import visualize_results as vr
 import pickle
+import torch.multiprocessing as mp
+
+try:
+    mp.set_start_method('spawn')
+except RuntimeError:
+    pass
+# from multiprocessing import Pool
 from math import log, floor
+
 
 # Remove this function later on
 # def evaluate_planner(env, solver):
@@ -26,6 +34,12 @@ def human_format(num):
         num /= 1000.0
     return '{}{}'.format('{:f}'.format(num).rstrip('0').rstrip('.'), ['', 'K', 'M', 'B', 'T'][magnitude])
 
+
+def train(s):
+    s, interval = s
+    return s.train(episodes=interval)
+
+
 def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
     result = []
     for ep in range(eps):
@@ -34,7 +48,7 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
         done = False
         while not done:
             if render:
-                print(env.render())
+                env.render()
             action, action_info = solver.act(state, debug=True)
             state, reward, done, info = env.step(action)
             if verbose:
@@ -49,7 +63,8 @@ def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
                 print('Reward: {} \n Reward Decomposition: {}\n\n'.format(reward, info['reward_decomposition']))
             ep_reward += reward
             ep_steps += 1
-            done = done if ep_steps <= eps_max_steps else True
+            done = done or (ep_steps > eps_max_steps)
+        # print('ep_steps: ', ep_steps, ' reward:', ep_reward)
         result.append(ep_reward)
     return result
 
@@ -62,11 +77,14 @@ def calculate_q_val_dev(env, source, target):
             _, source_action_info = source.act(state, debug=True)
             _, target_action_info = target.act(state, debug=True)
             source_q, target_q = source_action_info['q_values'], target_action_info['q_values']
-            for rt in range(len(source_q)):
-                for a in source_q[rt].keys():
-                    # _dev.append(abs(source_q[rt][a] - target_q[rt][a]) / (abs(source_q[rt][a]) + 0.001)) # to prevent div by 0
-                    _dev.append(abs(source_q[rt][a] - target_q[rt][a]))  # to prevent div by 0
-        # dev_data.append(round(np.average(_dev),2)*100)  # *100 bcz %age
+            if target.use_decomposition:
+                for rt in range(len(source_q)):
+                    for a in source_q[rt].keys():
+                        _dev.append(abs(source_q[rt][a] - target_q[rt][a]))
+            else:
+                source_q = [sum(source_q[rt][a] for rt in range(len(source_q))) for a in source_q[0].keys()]
+                _dev.append(abs(np.array(source_q) - np.array(target_q)))
+
         dev_data.append(round(np.average(_dev), 2))  # *100 bcz %age
     return round(np.average(dev_data), 2)
 
@@ -82,11 +100,16 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
 
     """
 
-    info = {'test': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
-            'test_run_mean': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
-            'best_test': {type(solver()).__name__: -float('inf') for solver in solvers_fn},
-            'q_val_dev': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn},
-            'policy_eval': {type(solver()).__name__: [[] for _ in range(runs)] for solver in solvers_fn}}
+    info = {'test': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'test_run_mean': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'best_test': {solver().__name__: -float('inf') for solver in solvers_fn},
+            'q_val_dev': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'policy_eval': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'exploration_eps': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'experience_steps': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'train_loss': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn},
+            'train_perf': {solver().__name__: [[] for _ in range(runs)] for solver in solvers_fn}
+            }
 
     # get optimal policy using the planner
     if planner_fn is not None:
@@ -108,11 +131,16 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
 
             # train each solver
             for solver in solvers:
-                solver.train(episodes=interval)
+                solver_name = solver.__name__
+                train_perf, loss, exploration_eps, experience_steps = solver.train(episodes=interval)
+                info['train_perf'][solver_name][run].append(train_perf)
+                info['train_loss'][solver_name][run].append(loss)
+                info['exploration_eps'][solver_name][run].append(exploration_eps)
+                info['experience_steps'][solver_name][run].append(experience_steps)
 
             # evaluate each solver
             for solver in solvers:
-                solver_name = type(solver).__name__
+                solver_name = solver.__name__
                 perf = np.average(test(env, solver, eval_eps, eps_max_steps))
                 if planner_fn is not None:
                     dev = calculate_q_val_dev(env, planner, solver)
@@ -132,54 +160,80 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                     info['test_run_mean'][solver_name][run].append(((n * m + perf) / (n + 1)))
 
                 if info['test'][solver_name][run][-1] >= info['best_test'][solver_name]:
-                    solver.save(os.path.join(result_path, solver_name + '.p'))
+                    solver.save(os.path.join(result_path, solver_name + '_best.p'))
                     info['best_test'][solver_name] = info['test'][solver_name][run][-1]
 
-            print('Run {} : {}/{} ==> {}'.format(run, curr_eps, max_eps,
-                                                 [(k, round(info['test_run_mean'][k][run][-1], 2)) for k in
-                                                  sorted(info['test'].keys())]))
+                solver.save(os.path.join(result_path, solver_name + '_last.p'))
+
+            _msg = 'Run {} : {}/{}' \
+                   ' Test[Current Score: {} Best Score:{}]' \
+                   ' Train [ Current Performance:{} Exploration:{} Loss:{} Experiance: {}'
+            print(_msg.format(run, curr_eps, max_eps,
+                              [(k, round(info['test'][k][run][-1], 2)) for k in sorted(info['test'].keys())],
+                              [(k, round(info['best_test'][k], 2)) for k in sorted(info['best_test'].keys())],
+                              [(k, round(info['train_perf'][k][run][-1], 2)) for k in
+                               sorted(info['train_perf'].keys())],
+                              [(k, round(info['exploration_eps'][k][run][-1], 2)) for k in
+                               sorted(info['exploration_eps'].keys())],
+                              [(k, round(info['train_loss'][k][run][-1], 2)) for k in
+                               sorted(info['train_loss'].keys())],
+                              [(k, round(info['experience_steps'][k][run][-1], 2)) for k in
+                               sorted(info['experience_steps'].keys())]
+                              ))
             curr_eps += interval
 
+        _train_perf_data, _exploration_data, _experience_steps_data, _train_loss_data = {}, {}, {}, {}
         _test_data, _test_run_mean = {}, {}
+
         _q_val_dev_data, _policy_eval_data = {}, {}
         for solver in solvers:
-            solver_name = type(solver).__name__
+            solver_name = solver.__name__
             _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
             _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
+            _train_perf_data[solver_name] = np.average(info['train_perf'][solver_name][:run + 1], axis=0)
+            _exploration_data[solver_name] = np.average(info['exploration_eps'][solver_name][:run + 1], axis=0)
+            _experience_steps_data[solver_name] = np.average(info['experience_steps'][solver_name][:run + 1], axis=0)
+            _train_loss_data[solver_name] = np.average(info['train_loss'][solver_name][:run + 1], axis=0)
+
             if planner_fn is not None:
                 _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run + 1], axis=0)
                 _policy_eval_data[solver_name] = np.average(info['policy_eval'][solver_name][:run + 1], axis=0)
+
         _data = {'data': _test_data, 'run_mean': _test_run_mean, 'q_val_dev': _q_val_dev_data,
-                 'policy_eval': _policy_eval_data, 'runs': runs}
+                 'policy_eval': _policy_eval_data, 'runs': runs,
+                 'train_perf': _train_perf_data, 'exploration': _exploration_data,
+                 'experience': _experience_steps_data,
+                 'train_loss': _train_loss_data}
         pickle.dump(_data, open(os.path.join(result_path, 'train_data.p'), 'wb'))
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
 
-def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False):
+def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False, suffix='_best.p'):
     data = {}
     # evaluate each solver
     for solver_fn in solvers_fn:
         solver = solver_fn()
         env.seed(0)
-        solver_name = type(solver).__name__
-        solver.restore(os.path.join(result_path, solver_name + '.p'))
+        solver_name = solver.__name__
+        solver.restore(os.path.join(result_path, solver_name + suffix))
         perf = np.average(test(env, solver, eval_eps, eps_max_steps, render))
         data[solver_name] = perf
-    pickle.dump(data, open(os.path.join(result_path, 'test_data.p'), 'wb'))
+
+    pickle.dump(data, open(os.path.join(result_path, 'test_data' + suffix), 'wb'))
     data = {k: np.average(v) for k, v in data.items()}
 
     return data
 
 
-def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
+def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, suffix='_best.p'):
     data = {}
     for solver in solvers:
-        solver_name = type(solver).__name__
-        solver.restore(os.path.join(result_path, solver_name + '.p'))
+        solver_name = solver.__name__
+        solver.restore(os.path.join(result_path, solver_name + suffix))
 
     env.seed(0)
     for base_solver in solvers:
-        base_solver_name = type(base_solver).__name__
+        base_solver_name = base_solver.__name__
         solver_data = []
         for ep in range(eval_episodes):
             ep_reward = 0
@@ -187,10 +241,16 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
             steps, done = 0, False
             ep_data = []
 
-            state_info = {'state': env.render(mode='print'), 'solvers': {}, 'terminal': done,
-                          'reward': {_: 0 for _ in env.reward_types}}
+            if 'rgb_array' in env.metadata['render.modes']:
+                render_mode = 'rgb_array'
+            else:
+                render_mode = 'print'
+            state_info = {'state': env.render(mode=render_mode),
+                          'solvers': {}, 'terminal': done,
+                          'reward': {_: 0 for _ in env.reward_types},
+                          'render_mode': render_mode}
             for solver in solvers:
-                solver_name = type(solver).__name__
+                solver_name = solver.__name__
                 _action, _action_info = solver.act(state, debug=True)
                 state_info['solvers'][solver_name] = _action_info
                 state_info['solvers'][solver_name]['action'] = _action
@@ -202,20 +262,21 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
                 done = done or (steps >= eps_max_steps)
                 steps += 1
                 ep_reward += reward
-                state_info = {'state': env.render(mode='print'), 'solvers': {}, 'terminal': done,
-                              'reward': step_info['reward_decomposition']}
+                state_info = {'state': env.render(mode=render_mode), 'solvers': {}, 'terminal': done,
+                              'reward': step_info['reward_decomposition'],
+                              'render_mode': render_mode}
                 for solver in solvers:
-                    solver_name = type(solver).__name__
+                    solver_name = solver.__name__
                     _action, _action_info = solver.act(state, debug=True)
                     state_info['solvers'][solver_name] = _action_info
                     state_info['solvers'][solver_name]['action'] = _action
                 ep_data.append(state_info)
-
+            print(ep, len(ep_data))
             solver_data.append({'data': ep_data, 'score': human_format(ep_reward)})
-        data[base_solver_name] = solver_data
+        data[base_solver_name] = {'episodes': solver_data, 'reward_types': base_solver.reward_types}
 
     _data = {'data': data, 'reward_types': sorted(env.reward_types), 'actions': env.action_meanings}
-    pickle.dump(_data, open(os.path.join(result_path, 'x_data.p'), 'wb'))
+    pickle.dump(_data, open(os.path.join(result_path, 'x_data' + suffix), 'wb'))
 
 
 def visualize_results(result_path, host, port):

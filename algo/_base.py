@@ -3,19 +3,22 @@ import pickle
 import torch
 import numpy as np
 from .utils import _LinearDecay
-from torch.optim import SGD
+from torch.optim import SGD, Adam
 
 
 class _Base:
     """ Base Class for Decomposed Reward Algorithms with expandability"""
 
-    def __init__(self, env):
+    def __init__(self, env, max_episode_steps, use_decomposition=True):
         """
         :param env: instance of the environment
         """
         self.env = env
+        self.env.seed(0)
         self.actions = env.action_space.n
-        self.reward_types = sorted(env.reward_types)
+        self.reward_types = sorted(env.reward_types) if use_decomposition else ['reward']
+        self.max_episode_steps = max_episode_steps
+        self.use_decomposition = use_decomposition
 
     def _get_explanation(self, q_values):
         """returns rdx and msx for the given q_values"""
@@ -71,13 +74,13 @@ class _Base:
 class _BaseTablePlanner(_Base):
     """ Base Class for implementing decomposed reward Planning algorithm"""
 
-    def __init__(self, env, discount, threshold=0.001):
+    def __init__(self, env, discount, threshold=0.001, max_episode_steps=100000, use_decomposition=True):
         """
         :param env: instance of the environment
         :param discount: discount for future rewards
         :param threshold:
         """
-        super().__init__(env)
+        super().__init__(env, max_episode_steps, use_decomposition)
         self.state_space = env.states
         self.transition_prob_fn = env.transition_prob
         self.is_terminal = env.is_terminal
@@ -114,7 +117,7 @@ class _BaseTablePlanner(_Base):
 class _BaseLearner(_Base):
     """ Base Class for implementing decomposed rewards algorithms"""
 
-    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):
+    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps, use_decomposition=True):
         """
 
         :param env: instance of the environment
@@ -124,7 +127,7 @@ class _BaseLearner(_Base):
         :param max_eps: maximum epsilon for exploration
         :param total_episodes: total no. of episodes for training (used for linearly decaying the exploration rate)
         """
-        super().__init__(env)
+        super().__init__(env, max_episode_steps, use_decomposition)
         self.lr = lr
         self.discount = discount
         self.linear_decay = _LinearDecay(min_eps, max_eps, total_episodes)
@@ -175,9 +178,11 @@ class _BaseTableLearner(_BaseLearner):
 class _BaseDeepLearner(_BaseLearner):
     def __init__(self, model, update_target_interval, use_cuda, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
+        import copy
         self.model = model
-        self.target_model = model
+        self.target_model = copy.deepcopy(model)
+        self.target_model.eval()
+
         self.update_target_interval = update_target_interval
         self.use_cuda = use_cuda
 
@@ -185,24 +190,24 @@ class _BaseDeepLearner(_BaseLearner):
             self.model = self.model.cuda()
             self.target_model = self.target_model.cuda()
 
-        self.optimizer = SGD(self.model.parameters(), lr=self.lr)
+        self.optimizer = Adam(self.model.parameters(), lr=self.lr)
+
+        self.step_count = 0
 
     def act(self, state, debug=False):
         """ returns greedy action"""
         state = torch.FloatTensor(state).unsqueeze(0)
         if self.use_cuda:
             state = state.cuda()
-
         q_values = None
         for rt, _ in enumerate(self.reward_types):
             rt_q_value = self.model(state, rt)
             q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
         action = int(q_values.sum(0).max(0)[1].data.cpu().numpy())
-        q_values = q_values.data.cpu().numpy().tolist()
-
         if not debug:
             return action
         else:
+            q_values = q_values.data.cpu().numpy().tolist()
             rdx, msx = self._get_explanation(q_values)
             info = {'msx': msx, 'rdx': rdx, 'q_values': q_values}
             return action, info

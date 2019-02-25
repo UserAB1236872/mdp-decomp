@@ -4,8 +4,9 @@ from ._base import _BaseTableLearner
 class DRSarsa(_BaseTableLearner):
     """ Sarsa for Decomposed Rewards"""
 
-    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):
-        super().__init__(env, lr, discount, min_eps, max_eps, total_episodes)
+    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps=100000,
+                 use_decomposition=True):
+        super().__init__(env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps, use_decomposition)
 
     def _update(self, state, action, next_state, next_state_action, reward, done):
         for rt, r in enumerate(reward):

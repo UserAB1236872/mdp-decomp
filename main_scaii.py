@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     # initialize solvers
 
-    model_fn = lambda: DRModel(state.size, actions, reward_types)
+    model_fn = lambda: DRModel(state.size, reward_types, actions)
     dr_dqn_solver_fn = lambda: DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                      args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
 

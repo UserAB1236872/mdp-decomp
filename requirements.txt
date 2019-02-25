@@ -7,3 +7,4 @@ dash-html-components==0.13.4  # HTML components
 dash-core-components==0.42.1  # Supercharged components
 dash-table==3.1.11  # Interactive DataTable component (new!)
 colorlover==0.2.1
+colour==0.1.5

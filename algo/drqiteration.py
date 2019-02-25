@@ -5,8 +5,8 @@ from ._base import _BaseTablePlanner
 class DRQIteration(_BaseTablePlanner):
     """ Q Iteration for Decomposed Rewards """
 
-    def __init__(self, env, discount, threshold=0.001):
-        super().__init__(env, discount, threshold)
+    def __init__(self, env, discount, threshold=0.001, max_episode_steps=100000):
+        super().__init__(env, discount, threshold, max_episode_steps)
 
     def policy_evaluation(self, policy, verbose=False):
         delta = float('inf')

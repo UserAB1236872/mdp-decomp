@@ -8,6 +8,7 @@ from bokeh.palettes import Category10
 from bokeh.models import Legend, LegendItem, HoverTool
 from bokeh.layouts import row
 import colorlover as cl
+from colour import Color
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -16,6 +17,7 @@ import plotly.graph_objs as go
 from plotly import tools
 import pickle
 import numpy as np
+from PIL import Image
 
 
 def plot(perf_data, run_mean_data, file_path):
@@ -80,18 +82,15 @@ def plot(perf_data, run_mean_data, file_path):
     plotting.save(p)
 
 
-def x_layout(app, data, reward_types, actions, prefix):
-    # graph_style = {'width': '20%', 'display': 'inline-block'}
+def x_layout(app, data, reward_colors, actions, prefix):
     graph_style = {}
     solvers = sorted(data.keys())
     game_area_style = {'width': '300px', 'float': 'left', 'position': 'fixed'}
     graph_area_style = {'width': str(500 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
 
-    reward_colors = {rt: cl.scales['7']['qual']['Dark2'][i] for i, rt in enumerate(reward_types)}
-
     solver_dropdown_options = []
     for solver in solvers:
-        for i, ep in enumerate(data[solver]):
+        for i, ep in enumerate(data[solver]['episodes']):
             option = {'label': str(i) + '- ' + solver + '- Score: ' + str(ep['score']),
                       'value': solver + '-' + str(i)}
             solver_dropdown_options.append(option)
@@ -184,7 +183,6 @@ def x_layout(app, data, reward_types, actions, prefix):
     solver_dropdown_wrapper = html.Div(children=[html.Div(children='Trajectory Selector:'), solver_dropdown],
                                        className='solver_selector')
     # create the layout
-    # action_wrap = html.Div(className='action_area', children=["Action Pair:", action_pair_selector])
     state_slider_wrap = html.Div(className='trajectory', children=["States:", state_selector])
 
     state_info_wrap = html.Div(children=[html.Div('State Info:'),
@@ -215,7 +213,7 @@ def x_layout(app, data, reward_types, actions, prefix):
     def update_max_state_count(selected_base_solver_episode):
         selected_base_solver, episode = selected_base_solver_episode.split('-')
         episode = int(episode)
-        return str(len(data[selected_base_solver][episode]['data']) - 1)
+        return str(len(data[selected_base_solver]['episodes'][episode]['data']) - 1)
 
     @app.callback(
         Output(component_id=prefix + 'curr_state', component_property='children'),
@@ -252,8 +250,20 @@ def x_layout(app, data, reward_types, actions, prefix):
         selected_base_solver, episode = selected_solver_episode.split('-')
         episode = int(episode)
         curr_state = int(curr_state)
-        html_state = [html.Span(children=row) for row in
-                      data[selected_base_solver][episode]['data'][curr_state]['state'].split('\n')]
+
+        _state_info = data[selected_base_solver]['episodes'][episode]['data'][curr_state]
+        if 'render_mode' in _state_info and _state_info['render_mode'] == 'rgb_array':
+            import base64
+            from io import BytesIO
+            _image = Image.fromarray(_state_info['state'])
+            output = BytesIO()
+            _image.save(output, format='PNG')
+            output.seek(0)
+            encoded_image = base64.b64encode(output.read())
+            html_state = html.Img(src='data:image/png;base64,{}'.format(str(encoded_image)[2:-1]))
+        else:
+            html_state = [html.Span(children=row) for row in
+                          data[selected_base_solver]['episodes'][episode]['data'][curr_state]['state'].split('\n')]
         return html_state
 
     # create callbacks
@@ -265,8 +275,8 @@ def x_layout(app, data, reward_types, actions, prefix):
         selected_base_solver, episode = selected_solver_episode.split('-')
         episode = int(episode)
         curr_state = int(curr_state)
-        html_reward = [html.Div(children=row[0] + ':' + str(row[1])) for row in
-                       data[selected_base_solver][episode]['data'][curr_state]['reward'].items()]
+        html_reward = [html.Div(children=row[0] + ':' + str(round(row[1], 2))) for row in
+                       data[selected_base_solver]['episodes'][episode]['data'][curr_state]['reward'].items()]
         return html_reward
 
     # create callbacks
@@ -278,7 +288,7 @@ def x_layout(app, data, reward_types, actions, prefix):
         selected_base_solver, episode = selected_solver_episode.split('-')
         episode = int(episode)
         curr_state = int(curr_state)
-        return html.Span(str(data[selected_base_solver][episode]['data'][curr_state]['terminal']))
+        return html.Span(str(data[selected_base_solver]['episodes'][episode]['data'][curr_state]['terminal']))
 
     for solver in solvers:
 
@@ -292,10 +302,13 @@ def x_layout(app, data, reward_types, actions, prefix):
             episode = int(episode)
             i = int(i)
             y_data = []
+            _reward_types = data[solver]['reward_types']
             for a in range(len(actions)):
-                y_data.append(sum(
-                    data[selected_base_solver][episode]['data'][i]['solvers'][solver]['q_values'][rt_i][a] for rt_i in
-                    range(len(reward_types))))
+                _sum = sum(data[selected_base_solver]['episodes']
+                           [episode]['data'][i]['solvers'][solver]
+                           ['q_values'][rt_i][a]
+                           for rt_i in range(len(_reward_types)))
+                y_data.append(_sum)
             figure = {
                 'data': [{'x': actions,
                           'y': y_data,
@@ -318,12 +331,12 @@ def x_layout(app, data, reward_types, actions, prefix):
             episode = int(episode)
             i = int(i)
             rt_data = []
-            for rt_i, rt in enumerate(reward_types):
+            _reward_types = data[solver]['reward_types']
+            for rt_i, rt in enumerate(_reward_types):
                 rt_data.append({'x': actions,
-                                'y': [
-                                    data[selected_base_solver][episode]['data'][i]['solvers'][solver]['q_values'][rt_i][
-                                        a]
-                                    for a in range(len(actions))],
+                                'y': [data[selected_base_solver]['episodes'][episode]['data']
+                                      [i]['solvers'][solver]['q_values'][rt_i][a]
+                                      for a in range(len(actions))],
                                 'type': 'bar',
                                 'name': rt,
                                 'marker': {'color': reward_colors[rt]}
@@ -332,7 +345,8 @@ def x_layout(app, data, reward_types, actions, prefix):
                 'data': rt_data,
                 'layout': {
                     'title': solver,
-                    'showgrid': True
+                    'showgrid': True,
+                    'showlegend': True
                 }
             }
             return figure
@@ -346,7 +360,7 @@ def x_layout(app, data, reward_types, actions, prefix):
             selected_base_solver, episode = selected_base_solver_episode.split('-')
             episode = int(episode)
             state = int(state)
-            greedy_act = data[selected_base_solver][episode]['data'][state]['solvers'][solver]['action']
+            greedy_act = data[selected_base_solver]['episodes'][episode]['data'][state]['solvers'][solver]['action']
             return str(greedy_act) + '_' + str([x for x in range(len(actions)) if x != greedy_act][0])
 
         @app.callback(
@@ -358,7 +372,7 @@ def x_layout(app, data, reward_types, actions, prefix):
             selected_base_solver, episode = selected_base_solver_episode.split('-')
             episode = int(episode)
             state = int(state)
-            greedy_act = data[selected_base_solver][episode]['data'][state]['solvers'][solver]['action']
+            greedy_act = data[selected_base_solver]['episodes'][episode]['data'][state]['solvers'][solver]['action']
             return 'Action: ' + actions[greedy_act]
 
         @app.callback(
@@ -373,10 +387,12 @@ def x_layout(app, data, reward_types, actions, prefix):
             state = int(state)
             first_action, sec_action = [int(a) for a in action_pair.split('_')]
             rt_data = []
-            for rt_i, rt in enumerate(reward_types):
+            _reward_types = data[solver]['reward_types']
+            for rt_i, rt in enumerate(_reward_types):
+                _y = [data[selected_base_solver]['episodes'][episode]['data'][state]['solvers'][solver]['rdx'][
+                          first_action][sec_action][rt]]
                 rt_data.append({'x': [''],
-                                'y': [data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
-                                          first_action][sec_action][rt]],
+                                'y': _y,
                                 'type': 'bar',
                                 'name': rt,
                                 'marker': {'color': reward_colors[rt]}})
@@ -404,15 +420,17 @@ def x_layout(app, data, reward_types, actions, prefix):
             state = int(state)
             first_action, sec_action = [int(a) for a in action_pair.split('_')]
 
-            msx_data = data[selected_base_solver][episode]['data'][state]['solvers'][solver]['msx'][first_action][
-                sec_action]
+            msx_data = data[selected_base_solver]['episodes'] \
+                [episode]['data'][state]['solvers'] \
+                [solver]['msx'][first_action][sec_action]
+
             pos_msx_data, neg_msx_data = msx_data
 
             pos_rt_data, neg_rt_data = [], []
             for rt in pos_msx_data:
                 pos_rt_data.append(go.Bar(
                     x=[''],
-                    y=[data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                    y=[data[selected_base_solver]['episodes'][episode]['data'][state]['solvers'][solver]['rdx'][
                            first_action][sec_action][rt]],
                     name=rt,
                     marker={'color': reward_colors[rt]}
@@ -420,7 +438,7 @@ def x_layout(app, data, reward_types, actions, prefix):
             for rt in neg_msx_data:
                 neg_rt_data.append(go.Bar(
                     x=[''],
-                    y=[data[selected_base_solver][episode]['data'][state]['solvers'][solver]['rdx'][
+                    y=[data[selected_base_solver]['episodes'][episode]['data'][state]['solvers'][solver]['rdx'][
                            first_action][sec_action][rt]],
                     name=rt,
                     marker={'color': reward_colors[rt]}
@@ -442,11 +460,51 @@ def x_layout(app, data, reward_types, actions, prefix):
     return layout
 
 
-def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, policy_eval_data, test_data, solvers, runs=1,
+def train_page_layout(app, train_data, train_perf_data, exploration_data, experience_data, train_loss_data,
+                      run_mean_data, q_val_dev_data, policy_eval_data, test_best_data, test_last_data, solvers, runs=1,
                       prefix=''):
     solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
     train_traces, run_mean_traces, q_val_dev_traces, policy_eval_traces, best_policy_test_data = [], [], [], [], []
+    last_policy_test_data = []
+    train_perf_traces, exploration_traces, train_loss_traces = [], [], []
+    experiance_traces = []
     for solver in sorted(solvers):
+        # -----------new addition -----
+        train_perf_trace = {
+            'x': [_ + 1 for _ in range(len(train_perf_data[solver]))],
+            'y': train_perf_data[solver],
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': solver,
+            'line': {'color': solver_colors[solver]}
+        }
+        exploration_trace = {
+            'x': [_ + 1 for _ in range(len(exploration_data[solver]))],
+            'y': exploration_data[solver],
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': solver,
+            'line': {'color': solver_colors[solver]}
+        }
+        experiance_trace = {
+            'x': [_ + 1 for _ in range(len(experience_data[solver]))],
+            'y': experience_data[solver],
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': solver,
+            'line': {'color': solver_colors[solver]}
+        }
+
+        train_loss_trace = {
+            'x': [_ + 1 for _ in range(len(train_loss_data[solver]))],
+            'y': train_loss_data[solver],
+            'type': 'scatter',
+            'mode': 'lines',
+            'name': solver,
+            'line': {'color': solver_colors[solver]}
+        }
+
+        # --------------------------------
         train_trace = {
             'x': [_ + 1 for _ in range(len(train_data[solver]))],
             'y': train_data[solver],
@@ -483,25 +541,88 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, policy_eva
                 'line': {'color': solver_colors[solver]}
             }
             policy_eval_traces.append(policy_eval_trace)
-        if solver in test_data:
+        if solver in test_best_data:
             best_policy_trace = {
                 'x': [''],
-                'y': [test_data[solver]],
+                'y': [test_best_data[solver]],
                 'type': 'bar',
                 'name': solver,
                 'marker': {'color': solver_colors[solver]}
             }
             best_policy_test_data.append(best_policy_trace)
+        if solver in test_last_data:
+            last_policy_trace = {
+                'x': [''],
+                'y': [test_last_data[solver]],
+                'type': 'bar',
+                'name': solver,
+                'marker': {'color': solver_colors[solver]}
+            }
+            last_policy_test_data.append(last_policy_trace)
         train_traces.append(train_trace)
         run_mean_traces.append(run_mean_trace)
+        train_loss_traces.append(train_loss_trace)
+        exploration_traces.append(exploration_trace)
+        experiance_traces.append(experiance_trace)
+        train_perf_traces.append(train_perf_trace)
 
+    # ----- new addition --
+    train_perf_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-train_perf',
+            figure={
+                'data': train_perf_traces,
+                'layout': {
+                    'title': 'Training Episodes Score',
+                    'showlegend': True,
+                    'showgrid': True
+                }
+            }
+        )])
+    exploration_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-exploration',
+            figure={
+                'data': exploration_traces,
+                'layout': {
+                    'title': 'Exploration Rate',
+                    'showlegend': True,
+                    'showgrid': True
+                }
+            }
+        )])
+    experience_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-experiance',
+            figure={
+                'data': experiance_traces,
+                'layout': {
+                    'title': 'Experiance',
+                    'showlegend': True,
+                    'showgrid': True
+                }
+            }
+        )])
+    train_loss_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-train_loss',
+            figure={
+                'data': train_loss_traces,
+                'layout': {
+                    'title': 'Training Loss',
+                    'showlegend': True,
+                    'showgrid': True
+                }
+            }
+        )])
+    # ---------------------
     train_graph = html.Div(className='graph_box', children=[
         dcc.Graph(
             id=prefix + '-train',
             figure={
                 'data': train_traces,
                 'layout': {
-                    'title': 'Running Score',
+                    'title': 'Testing Score',
                     'showlegend': True,
                     'showgrid': True
                 }
@@ -513,7 +634,7 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, policy_eva
             figure={
                 'data': run_mean_traces,
                 'layout': {
-                    'title': 'Running Score Mean',
+                    'title': 'Testing Running Mean',
                     'showlegend': True,
                     'showgrid': True
                 }
@@ -555,9 +676,29 @@ def train_page_layout(app, train_data, run_mean_data, q_val_dev_data, policy_eva
                 }
             }
         )])
-    info_box = html.Div(children='Runs:' + str(runs))
-    layout = html.Div(children=[train_graph, run_mean_graph, q_val_dev_graph, policy_eval_graph,
-                                best_policy_graph, info_box])
+    last_policy_graph = html.Div(className='graph_box', children=[
+        dcc.Graph(
+            id=prefix + '-last_policy',
+            figure={
+                'data': last_policy_test_data,
+                'layout': {
+                    'title': 'Evaluation of Last Policy',
+                    'showlegend': True,
+                    'showgrid': True
+                }
+            }
+        )])
+    info_box = html.Div(children='Runs:' + str(runs),className='info_box')
+
+    layout_children = [info_box,train_graph, run_mean_graph, train_perf_graph,
+                       train_loss_graph, exploration_graph, experience_graph,
+                       best_policy_graph, last_policy_graph]
+    if len(q_val_dev_data) > 0:
+        layout_children.append(q_val_dev_graph)
+    if len(policy_eval_data) > 0:
+        layout_children.append(policy_eval_graph)
+
+    layout = html.Div(children=layout_children)
     return layout
 
 
@@ -571,46 +712,60 @@ def visualize_results(result_path, host, port):
             if os.path.isdir(os.path.join(result_path, o))]
     index_children = []
     layouts = {}
+    reward_colors = {'reward': Color(pick_for='reward', saturation=0.5, luminance=0.5).get_hex()}
     for env, env_path in envs:
         layouts[env] = {}
-        x_path = os.path.join(env_path, 'x_data.p')
+        best_x_path = os.path.join(env_path, 'x_data_best.p')
+        last_x_path = os.path.join(env_path, 'x_data_last.p')
         train_path = os.path.join(env_path, 'train_data.p')
-        test_path = os.path.join(env_path, 'test_data.p')
-
+        best_test_path = os.path.join(env_path, 'test_data_best.p')
+        last_test_path = os.path.join(env_path, 'test_data_last.p')
+        env_list = []
         if os.path.exists(train_path):
             prefix = env.lower() + '_training'
             _path = '/' + prefix
-            train_page = dcc.Link(env + ': Training ', href=_path)
+            train_page = dcc.Link(env + ': Training ', href=_path, className='page_url')
             train_data = pickle.load(open(train_path, 'rb'))
             if 'policy_eval' not in train_data.keys():
                 train_data['policy_eval'] = {}
-            test_data = pickle.load(open(test_path, 'rb')) if os.path.exists(test_path) else {}
-            layouts[_path] = train_page_layout(app, train_data['data'], train_data['run_mean'],
+            best_test_data = pickle.load(open(best_test_path, 'rb')) if os.path.exists(best_test_path) else {}
+            last_test_data = pickle.load(open(last_test_path, 'rb')) if os.path.exists(last_test_path) else {}
+            layouts[_path] = train_page_layout(app, train_data['data'], train_data['train_perf'],
+                                               train_data['exploration'], train_data['experience'],
+                                               train_data['train_loss'],
+                                               train_data['run_mean'],
                                                train_data['q_val_dev'], train_data['policy_eval'],
-                                               test_data,
+                                               best_test_data, last_test_data,
                                                solvers=train_data['data'].keys(), runs=train_data['runs'],
                                                prefix=prefix)
-            index_children.append(train_page)
-            index_children.append(html.Br())
+            env_list.append(train_page)
+            env_list.append(html.Br())
 
-        if os.path.exists(x_path):
-            prefix = env.lower() + '_explanations'
-            _path = '/' + prefix
-            x_page = dcc.Link(env + ': Explanations', href=_path)
-            x_data = pickle.load(open(x_path, 'rb'))
-            layouts[_path] = x_layout(app, x_data['data'], x_data['reward_types'],
-                                      x_data['actions'], prefix)
-            index_children.append(x_page)
-            index_children.append(html.Br())
+        for x_path in [best_x_path, last_x_path]:
+            if os.path.exists(x_path):
+                suffix = x_path.split('_')[-1].split('.')[0]
+                prefix = env.lower() + '_explanations_' + suffix
+                _path = '/' + prefix
+                x_page = dcc.Link(env + ': Explanations - ' + suffix + 'policy', href=_path, className='page_url')
+                x_data = pickle.load(open(x_path, 'rb'))
 
+                for rt in x_data['reward_types']:
+                    if rt not in reward_colors:
+                        reward_colors[rt] = Color(pick_for=rt, saturation=0.5, luminance=0.5).get_hex()
+
+                layouts[_path] = x_layout(app, x_data['data'], reward_colors,
+                                          x_data['actions'], prefix)
+                env_list.append(x_page)
+                env_list.append(html.Br())
+        index_children.append(html.Div(className='env_list', children=env_list))
     app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
-        html.Div(id='page-content')
+        html.Div(id='home')
     ])
+    title = html.Div(children="Decomposed Reward Reinforcement Learning Results", id='main_title')
+    index_page = html.Div(children=[title] + index_children)
 
-    index_page = html.Div(children=index_children)
-
-    @app.callback(Output('page-content', 'children'),
+    @app.callback(Output('home', 'children'),
                   [Input('url', 'pathname')])
     def display_page(pathname):
         if pathname in layouts:

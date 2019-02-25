@@ -4,7 +4,7 @@ import gym, gym_decomp
 import torch
 import monitor
 import torch.nn as nn
-from algo import DRQLearn, DRSarsa, DRDSarsa, DRDQN, HRA, DRQIteration
+from algo import DRDSarsa, DRDQN, HRA
 import numpy as np
 
 
@@ -16,9 +16,9 @@ class DRModel(nn.Module):
         self.state_size = state_size
 
         for rt in range(reward_types):
-            model = nn.Sequential(nn.Linear(state_size, 128),
+            model = nn.Sequential(nn.Linear(state_size, 64),
                                   nn.ReLU(),
-                                  nn.Linear(128, actions))
+                                  nn.Linear(64, actions))
             model[-1].weight.data.fill_(0)
             model[-1].bias.data.fill_(0)
             setattr(self, 'model_{}'.format(rt), model)
@@ -29,21 +29,21 @@ class DRModel(nn.Module):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
-    parser.add_argument('--env', default='HivSimulator-v0', help='Name of the environment')
+    parser.add_argument('--env', default='DecomposedLunarLander-v2', help='Name of the environment')
     parser.add_argument('--result_dir', default=os.path.join(os.getcwd(), 'results'),
                         help="Directory Path to store results")
     parser.add_argument('--no_cuda', action='store_true', default=False, help='no cuda usage')
     parser.add_argument('--lr', type=float, default=0.01, help='Learning rate')
     parser.add_argument('--min_eps', type=float, default=0.1, help='Min Epsilon for Exploration')
     parser.add_argument('--max_eps', type=float, default=0.9, help='Max. Epsilon for Exploration')
-    parser.add_argument('--total_episodes', type=int, default=20000, help='Total Number of episodes for training')
+    parser.add_argument('--total_episodes', type=int, default=10000, help='Total Number of episodes for training')
     parser.add_argument('--eval_episodes', type=int, default=5, help='Number of episodes for evaluation/interval')
     parser.add_argument('--train_interval', type=int, default=100, help='No. of Episodes per training interval')
     parser.add_argument('--runs', type=int, default=1, help='Experiment Repetition Count')
     parser.add_argument('--discount', type=float, default=0.99, help=' Discount')
-    parser.add_argument('--mem_len', type=float, default=50000, help=' Size of Experience Replay Memory')
+    parser.add_argument('--mem_len', type=float, default=100000, help=' Size of Experience Replay Memory')
     parser.add_argument('--batch_size', type=float, default=512, help=' Batch size ')
-    parser.add_argument('--episode_max_steps', type=float, default=300, help='Maximum Number of steps in an episode')
+    parser.add_argument('--episode_max_steps', type=float, default=2000, help='Maximum Number of steps in an episode')
     parser.add_argument('--train', action='store_true', default=False, help=' Trains all the solvers for given env.')
     parser.add_argument('--test', action='store_true', default=False,
                         help=' Restores and Tests all the solvers for given env.')
@@ -58,7 +58,7 @@ if __name__ == '__main__':
     parser.add_argument('--visualize_results', action='store_true', default=False,
                         help='Visualizes the results in the browser ')
     parser.add_argument('--use_planner', action='store_true', default=False,
-                        help=' ')
+                        help='Use planner for ground truth estimation of q-values (only used in table methods)')
 
     np.random.seed(0)
     torch.manual_seed(0)
@@ -108,6 +108,7 @@ if __name__ == '__main__':
 
     solvers_fn = [dqn_solver_fn, dr_dqn_solver_fn, unhra_solver_fn, hra_solver_fn, dsarsa_solver_fn,
                   dr_dsarsa_solver_fn]
+    # solvers_fn = [dqn_solver_fn]
 
     # Fire it up!
     if args.train:
