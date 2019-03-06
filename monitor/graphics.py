@@ -96,10 +96,6 @@ def plot(perf_data, run_mean_data, file_path):
 def x_layout(app, data, reward_colors, actions, prefix):
     graph_style = {}
     solvers = sorted(data.keys())
-    solvers.pop('unhra')
-    solvers.pop('dsarsa')
-    solvers.pop('dqn')
-
     game_area_style = {'width': '300px', 'float': 'left', 'position': 'fixed'}
     graph_area_style = {'width': str(1000 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
 
@@ -785,7 +781,7 @@ def visualize_results(result_path, host, port):
             env_list.append(train_page)
             env_list.append(html.Br())
 
-        _colors = copy.deepcopy(cl.scales['8']['qual']['Dark2'])
+        _colors = copy.deepcopy(cl.scales['12']['qual']['Set3'])
         reward_colors = {'reward': _colors.pop()}
 
         for x_path in [best_x_path, last_x_path]:
