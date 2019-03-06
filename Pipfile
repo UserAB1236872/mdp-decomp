@@ -19,6 +19,7 @@ colorlover = "*"
 gym_decomp = {git = "https://github.com/Zaerei/gym_decomp"}
 google = "*"
 protobuf = "*"
+colour = "*"
 
 [requires]
 python_version = "3.6"

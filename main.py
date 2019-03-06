@@ -6,7 +6,9 @@ import torch
 import monitor
 import torch.nn as nn
 from algo import DRQLearn, DRSarsa, DRDSarsa, DRDQN, HRA, DRQIteration
-
+import logging
+logging.basicConfig()
+logging.getLogger().setLevel(logging.INFO)
 
 class DRModel(nn.Module):
     def __init__(self, state_size, reward_types, actions):
@@ -89,24 +91,23 @@ if __name__ == '__main__':
     def dr_sarsa_fn(): return DRSarsa(env_fn(), args.lr, args.discount,
                                       args.min_eps, args.max_eps, args.total_episodes)
 
-    def model_fn(): return DRModel(state.size, actions, reward_types)
-    def dr_dqn_solver_fn(): return DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                         args.min_eps, args.max_eps, args.total_episodes)
+    model_fn = lambda: DRModel(state.size, reward_types, actions)
+    dr_dqn_solver_fn = lambda: DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
+                                     args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
 
-    def dr_dsarsa_solver_fn(): return DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
-                                               args.batch_size, args.min_eps, args.max_eps, args.total_episodes)
+    dr_dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
+                                           args.batch_size, args.min_eps, args.max_eps, args.total_episodes,
+                                           use_cuda=args.cuda)
 
-    def hra_solver_fn(): return HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                    args.min_eps, args.max_eps, args.total_episodes)
-    solvers_fn = [dr_qlearn_fn, dr_sarsa_fn,
-                  dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
-
-    planner = DRQIteration(
-        env_fn(), args.discount) if args.use_planner else None
+    hra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
+                                args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
+    solvers_fn = [dr_qlearn_fn, dr_sarsa_fn, dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
+    
     # Fire it up!
     if args.train:
+        planner_fn = (lambda: DRQIteration(env_fn(), args.discount)) if args.use_planner else None
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
-                    args.train_interval, result_path=args.env_result_dir, planner=planner)
+                    args.train_interval, result_path=args.env_result_dir, planner_fn=planner_fn)
     if args.test:
         result = monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
                               result_path=args.env_result_dir)
@@ -117,5 +118,4 @@ if __name__ == '__main__':
         monitor.eval_msx(env_fn(), solvers, args.eval_episodes,
                          args.episode_max_steps, result_path=args.env_result_dir)
     if args.visualize_results:
-        monitor.visualize_results(
-            result_path=args.result_dir, port=args.port, host=args.host)
+        monitor.visualize_results(result_path=args.result_dir, port=args.port, host=args.host)

@@ -22,7 +22,6 @@ class DRModel(nn.Module):
             model = nn.Sequential(nn.Linear(state_size, 256, bias=False),
                                   nn.Linear(256, actions, bias=False))
             setattr(self, 'model_{}'.format(rt), model)
-            # getattr(self, 'model_{}'.format(rt)).weight.data.fill_(0)
 
     def forward(self, input, r_type):
         return getattr(self, 'model_{}'.format(r_type))(input)
@@ -32,7 +31,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='')
     parser.add_argument('--env', default='ScaiiFourTowers-v1',
                         help='Name of the Scaii environment')
-    parser.add_argument('--result_dir', default=os.path.join(os.getcwd(), 'results', 'SCAII'),
+    parser.add_argument('--result_dir', default=os.path.join(os.getcwd(), 'results'),
                         help="Directory Path to store results")
     parser.add_argument('--no_cuda', action='store_true',
                         default=False, help='no cuda usage')
@@ -70,6 +69,8 @@ if __name__ == '__main__':
     parser.add_argument('--port', default='8051',
                         help='hosting port (default:8051)')
     parser.add_argument('--visualize_results', action='store_true', default=False,
+                        help='Visualizes the results in the browser ')
+    parser.add_argument('--use_planner', action='store_true', default=False,
                         help=' ')
     parser.add_argument('--no_hra', action='store_true',
                         default=False, help="Disables HRA")
@@ -90,15 +91,17 @@ if __name__ == '__main__':
     reward_types = len(env.reward_types)
 
     # initialize solvers
-    def model_fn(): return DRModel(state.size, reward_types, actions)
-    def dr_dqn_solver_fn(): return DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                         args.min_eps, args.max_eps, args.total_episodes)
 
-    def dr_dsarsa_solver_fn(): return DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
-                                               args.batch_size, args.min_eps, args.max_eps, args.total_episodes)
+    model_fn = lambda: DRModel(state.size, reward_types, actions)
+    dr_dqn_solver_fn = lambda: DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
+                                     args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
 
-    def hra_solver_fn(): return HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
-                                    args.min_eps, args.max_eps, args.total_episodes)
+    dr_dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
+                                           args.batch_size, args.min_eps, args.max_eps, args.total_episodes,
+                                           use_cuda=args.cuda)
+
+    hra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
+                                args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
     solvers_fn = [dr_dqn_solver_fn, dr_dsarsa_solver_fn]
 
     if not args.no_hra:
@@ -106,19 +109,17 @@ if __name__ == '__main__':
 
     # Fire it up!
     if args.train:
+        planner_fn = (lambda: DRQIteration(env_fn(), args.discount)) if args.use_planner else None
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
-                    args.train_interval, result_path=args.env_result_dir, restore=args.restore)
+                    args.train_interval, result_path=args.env_result_dir, planner_fn=planner_fn, restore=args.restore)
     if args.test:
         result = monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
                               result_path=args.env_result_dir)
         print(result)
     if args.eval_msx:
-        solvers = [dr_dsarsa_solver_fn(),
-                   dr_dqn_solver_fn()]
+        solvers = [dr_dsarsa_solver_fn(), dr_dqn_solver_fn()]
         if not args.no_hra:
             solvers.append(hra_solver_fn())
-        monitor.eval_msx(env_fn(), solvers, args.eval_episodes,
-                         args.episode_max_steps, result_path=args.env_result_dir, is_scaii=True)
+        monitor.eval_msx(env_fn(), solvers, args.eval_episodes, args.episode_max_steps, result_path=args.env_result_dir, is_scaii=True)
     if args.visualize_results:
-        monitor.visualize_results(
-            result_path=args.result_dir, port=args.port, host=args.host)
+        monitor.visualize_results(result_path=args.result_dir, port=args.port, host=args.host)

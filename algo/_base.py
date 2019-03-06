@@ -3,7 +3,7 @@ import pickle
 import torch
 import numpy as np
 from .utils import _LinearDecay
-from torch.optim import SGD
+from torch.optim import SGD, Adam
 
 import logging
 
@@ -11,13 +11,16 @@ import logging
 class _Base:
     """ Base Class for Decomposed Reward Algorithms with expandability"""
 
-    def __init__(self, env):
+    def __init__(self, env, max_episode_steps, use_decomposition=True):
         """
         :param env: instance of the environment
         """
         self.env = env
+        self.env.seed(0)
         self.actions = env.action_space.n
-        self.reward_types = sorted(env.reward_types)
+        self.reward_types = sorted(env.reward_types) if use_decomposition else ['reward']
+        self.max_episode_steps = max_episode_steps
+        self.use_decomposition = use_decomposition
 
     def _get_explanation(self, q_values):
         """returns rdx and msx for the given q_values"""
@@ -74,13 +77,13 @@ class _Base:
 class _BaseTablePlanner(_Base):
     """ Base Class for implementing decomposed reward Planning algorithm"""
 
-    def __init__(self, env, discount, threshold=0.001):
+    def __init__(self, env, discount, threshold=0.001, max_episode_steps=100000, use_decomposition=True):
         """
         :param env: instance of the environment
         :param discount: discount for future rewards
         :param threshold:
         """
-        super().__init__(env)
+        super().__init__(env, max_episode_steps, use_decomposition)
         self.state_space = env.states
         self.transition_prob_fn = env.transition_prob
         self.is_terminal = env.is_terminal
@@ -117,7 +120,7 @@ class _BaseTablePlanner(_Base):
 class _BaseLearner(_Base):
     """ Base Class for implementing decomposed rewards algorithms"""
 
-    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):
+    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps, use_decomposition=True):
         """
 
         :param env: instance of the environment
@@ -127,7 +130,7 @@ class _BaseLearner(_Base):
         :param max_eps: maximum epsilon for exploration
         :param total_episodes: total no. of episodes for training (used for linearly decaying the exploration rate)
         """
-        super().__init__(env)
+        super().__init__(env, max_episode_steps, use_decomposition)
         self.lr = lr
         self.discount = discount
         self.linear_decay = _LinearDecay(min_eps, max_eps, total_episodes)
@@ -181,32 +184,47 @@ class _BaseTableLearner(_BaseLearner):
 
 
 class _BaseDeepLearner(_BaseLearner):
-    def __init__(self, model, *args, **kwargs):
+    def __init__(self, model, update_target_interval, use_cuda, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
+        import copy
         self.model = model
-        self.target_model = model
-        self.optimizer = SGD(self.model.parameters(), lr=self.lr)
+        self.target_model = copy.deepcopy(model)
+        self.target_model.eval()
+
+        self.update_target_interval = update_target_interval
+        self.use_cuda = use_cuda
+
+        if self.use_cuda:
+            self.model = self.model.cuda()
+            self.target_model = self.target_model.cuda()
+
+        self.optimizer = Adam(self.model.parameters(), lr=self.lr)
+
+        self.step_count = 0
 
         self.max_fails = kwargs['max_fails'] if 'max_fails' in kwargs else 20
 
     def act(self, state, debug=False):
         """ returns greedy action"""
         state = torch.FloatTensor(state).unsqueeze(0)
+        if self.use_cuda:
+            state = state.cuda()
         q_values = None
         for rt, _ in enumerate(self.reward_types):
             rt_q_value = self.model(state, rt)
-            q_values = torch.cat((q_values, rt_q_value)
-                                 ) if q_values is not None else rt_q_value
-        action = int(q_values.sum(0).max(0)[1].data.numpy())
-        q_values = q_values.data.numpy().tolist()
-
+            q_values = torch.cat((q_values, rt_q_value)) if q_values is not None else rt_q_value
+        action = int(q_values.sum(0).max(0)[1].data.cpu().numpy())
         if not debug:
             return action
         else:
+            q_values = q_values.data.cpu().numpy().tolist()
             rdx, msx = self._get_explanation(q_values)
             info = {'msx': msx, 'rdx': rdx, 'q_values': q_values}
             return action, info
+
+    def update_target_model(self):
+        """ updates weights of the target network with the model weights"""
+        self.target_model.load_state_dict(self.model.state_dict())
 
     def save(self, path, train_checkpoint=False):
         torch.save(self.model.state_dict(), path)
@@ -219,6 +237,9 @@ class _BaseDeepLearner(_BaseLearner):
             self.optimizer.load_state_dict(torch.load(path + ".opt"))
 
     def train(self, episodes):
+        self.model.eval()
+        train_loss = []
+        perf = 0
         ep = 0
         fails = 0
         while ep < episodes:
@@ -227,13 +248,23 @@ class _BaseDeepLearner(_BaseLearner):
             try:
                 done = False
                 state = self.env.reset()
+                step = 0
+                ep_loss = []
                 while not done:
                     action = self.select_action(state)
                     next_state, _, done, info = self.env.step(action)
                     reward = [info['reward_decomposition'][rt]
                               for rt in self.reward_types]
-                    self.update(state, action, next_state, reward, done)
+                    loss = self.update(state, action, next_state, reward, done)
+                    if loss is not None:
+                        ep_loss.append(loss)
+                    perf += sum(reward)
                     state = next_state
+                    done = done or (step > self.max_episode_steps)
+                    step += 1
+                if len(ep_loss) > 0:
+                    ep_loss = np.average(ep_loss)
+                    train_loss.append(ep_loss)
 
                 self.linear_decay.update()
                 ep += 1
@@ -241,10 +272,13 @@ class _BaseDeepLearner(_BaseLearner):
             except Exception as e:
                 fails += 1
                 if fails >= self.max_fails:
-                    import os
                     logging.fatal("Fatal at episode %d, reched max fail count (%d) with error %s" % (
                         ep, self.max_fails, e))
-                    os.exit()
+                    raise e
                 else:
                     logging.error(
-                        "Error at episode %d, retrying %d / %d; error %s" % (ep, fails, self.max_fails, e))
+                        "Error at episode %d, retrying %d / %d; with error %s" % (ep, fails, self.max_fails, e))
+        train_loss = np.average(train_loss)
+        perf /= episodes
+        self.model.eval()
+        return perf, train_loss, self.linear_decay.eps, self.step_count

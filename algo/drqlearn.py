@@ -4,8 +4,13 @@ from ._base import _BaseTableLearner
 class DRQLearn(_BaseTableLearner):
     """ Q-Learning for Decomposed Rewards"""
 
-    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes):
-        super().__init__(env, lr, discount, min_eps, max_eps, total_episodes)
+    def __init__(self, env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps=100000,
+                 use_decomposition=True):
+        super().__init__(env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps, use_decomposition)
+    
+    @property
+    def __name__(self):
+        return 'drqlearn' if self.use_decomposition else 'qlearn'
 
     def _update(self, state, action, next_state, reward, done):
         next_state_action = self.act(next_state)
@@ -23,7 +28,7 @@ class DRQLearn(_BaseTableLearner):
             state = self.env.reset()
             state = self._ensure_state_exists(state)
             while not done:
-                action = self._select_action(state)
+                action = self.select_action(state)
                 next_state, _, done, info = self.env.step(action)
                 reward = [info['reward_decomposition'][rt] for rt in self.reward_types]
                 next_state = self._ensure_state_exists(next_state)
