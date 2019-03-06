@@ -84,7 +84,6 @@ if __name__ == '__main__':
     hra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                 args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda)
     solvers_fn = [dr_qlearn_fn, dr_sarsa_fn, dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
-    solvers_fn=[]
     # Fire it up!
     if args.train:
         planner_fn = (lambda: DRQIteration(env_fn(), args.discount)) if args.use_planner else None

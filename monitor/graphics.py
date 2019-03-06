@@ -18,6 +18,17 @@ from plotly import tools
 import pickle
 import numpy as np
 from PIL import Image
+import copy
+
+
+def smooth(scalars, weight=0.6):
+    last = scalars[0]
+    smoothed = list()
+    for point in scalars:
+        smoothed_val = last * weight + (1 - weight) * point
+        smoothed.append(smoothed_val)
+        last = smoothed_val
+    return smoothed
 
 
 def plot(perf_data, run_mean_data, file_path):
@@ -85,8 +96,12 @@ def plot(perf_data, run_mean_data, file_path):
 def x_layout(app, data, reward_colors, actions, prefix):
     graph_style = {}
     solvers = sorted(data.keys())
+    solvers.pop('unhra')
+    solvers.pop('dsarsa')
+    solvers.pop('dqn')
+
     game_area_style = {'width': '300px', 'float': 'left', 'position': 'fixed'}
-    graph_area_style = {'width': str(500 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
+    graph_area_style = {'width': str(1000 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
 
     solver_dropdown_options = []
     for solver in solvers:
@@ -98,6 +113,12 @@ def x_layout(app, data, reward_colors, actions, prefix):
         id=prefix + 'solver_dropdown',
         options=solver_dropdown_options,
         value=solver_dropdown_options[0]['value']
+    )
+    frame_skip = dcc.Input(
+        placeholder='Frames to skip...',
+        type='number',
+        value=1,
+        id=prefix + 'frame_skip'
     )
     manager = {'n_clicks': {}, 'curr_solver_episode': solver_dropdown_options[0]['value']}
     action_options = []
@@ -112,7 +133,8 @@ def x_layout(app, data, reward_colors, actions, prefix):
                                   html.Span('0', id=prefix + 'curr_state'),
                                   html.Span('/'),
                                   html.Span(str(len(data) - 1), id=prefix + 'max_state'),
-                                  html.Button('Next State', id=prefix + 'next_state')
+                                  html.Button('Next State', id=prefix + 'next_state'),
+                                  frame_skip
                               ])
     manager['n_clicks'][prefix + 'prev_state'] = 0
     manager['n_clicks'][prefix + 'next_state'] = 0
@@ -221,17 +243,19 @@ def x_layout(app, data, reward_colors, actions, prefix):
          Input(component_id=prefix + 'next_state', component_property='n_clicks'),
          Input(component_id=prefix + 'solver_dropdown', component_property='value')],
         [State(component_id=prefix + 'curr_state', component_property='children'),
-         State(component_id=prefix + 'max_state', component_property='children')])
-    def update_state(prev_state_n_clicks, next_state_n_clicks, selected_solver_episode, curr_state, max_state):
+         State(component_id=prefix + 'max_state', component_property='children'),
+         State(component_id=prefix + 'frame_skip', component_property='value')])
+    def update_state(prev_state_n_clicks, next_state_n_clicks, selected_solver_episode, curr_state, max_state,
+                     frame_skip):
         if selected_solver_episode == manager['curr_solver_episode']:
             curr_state, max_state = int(curr_state), int(max_state)
             prev_state_n_clicks = 0 if prev_state_n_clicks is None else prev_state_n_clicks
             next_state_n_clicks = 0 if next_state_n_clicks is None else next_state_n_clicks
 
             if manager['n_clicks'][prefix + 'prev_state'] < prev_state_n_clicks:
-                curr_state = (curr_state - 1) if curr_state > 0 else 0
+                curr_state = (curr_state - frame_skip) if curr_state > 0 else 0
             elif manager['n_clicks'][prefix + 'next_state'] < next_state_n_clicks:
-                curr_state = min(curr_state + 1, max_state)
+                curr_state = min(curr_state + frame_skip, max_state)
             manager['n_clicks'][prefix + 'prev_state'] = prev_state_n_clicks
             manager['n_clicks'][prefix + 'next_state'] = next_state_n_clicks
         else:
@@ -346,7 +370,7 @@ def x_layout(app, data, reward_colors, actions, prefix):
                 'layout': {
                     'title': solver,
                     'showgrid': True,
-                    'showlegend': True
+                    'showlegend': True,
                 }
             }
             return figure
@@ -468,6 +492,22 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
     last_policy_test_data = []
     train_perf_traces, exploration_traces, train_loss_traces = [], [], []
     experiance_traces = []
+
+    # smooth_graph_ids = ['test_score', 'train_loss']
+    # smooth_sliders = []
+    # for _graph in smooth_graph_ids:
+    #     smooth_sliders.append(
+    #         html.Span(children=[
+    #             html.Span(children=' '.join(_graph.split('_'))),
+    #             dcc.Slider(
+    #                 id=prefix + '-' + _graph + '-slider',
+    #                 min=0,
+    #                 max=1,
+    #                 step=0.1,
+    #                 value=0,
+    #             )])
+    #     )
+
     for solver in sorted(solvers):
         # -----------new addition -----
         train_perf_trace = {
@@ -513,14 +553,14 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
             'name': solver,
             'line': {'color': solver_colors[solver]}
         }
-        run_mean_trace = {
-            'x': [_ + 1 for _ in range(len(train_data[solver]))],
-            'y': [np.average(train_data[solver][max(0, i - 10):i + 1]) for i in range(len(train_data[solver]) - 1)],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        # run_mean_trace = {
+        #     'x': [_ + 1 for _ in range(len(train_data[solver]))],
+        #     'y': [np.average(train_data[solver][max(0, i - 10):i + 1]) for i in range(len(train_data[solver]) - 1)],
+        #     'type': 'scatter',
+        #     'mode': 'lines',
+        #     'name': solver,
+        #     'line': {'color': solver_colors[solver]}
+        # }
         if solver in q_val_dev_data:
             q_val_dev_trace = {
                 'x': [_ + 1 for _ in range(len(q_val_dev_data[solver]))],
@@ -560,7 +600,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
             }
             last_policy_test_data.append(last_policy_trace)
         train_traces.append(train_trace)
-        run_mean_traces.append(run_mean_trace)
+        # run_mean_traces.append(run_mean_trace)
         train_loss_traces.append(train_loss_trace)
         exploration_traces.append(exploration_trace)
         experiance_traces.append(experiance_trace)
@@ -628,18 +668,18 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 }
             }
         )])
-    run_mean_graph = html.Div(className='graph_box', children=[
-        dcc.Graph(
-            id=prefix + '-run_mean',
-            figure={
-                'data': run_mean_traces,
-                'layout': {
-                    'title': 'Testing Running Mean',
-                    'showlegend': True,
-                    'showgrid': True
-                }
-            }
-        )])
+    # run_mean_graph = html.Div(className='graph_box', children=[
+    #     dcc.Graph(
+    #         id=prefix + '-run_mean',
+    #         figure={
+    #             'data': run_mean_traces,
+    #             'layout': {
+    #                 'title': 'Testing Running Mean',
+    #                 'showlegend': True,
+    #                 'showgrid': True
+    #             }
+    #         }
+    #     )])
     q_val_dev_graph = html.Div(className='graph_box', children=[
         dcc.Graph(
             id=prefix + '-q_val_dev',
@@ -688,11 +728,15 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 }
             }
         )])
-    info_box = html.Div(children='Runs:' + str(runs),className='info_box')
+    info_box = html.Div(children='Runs:' + str(runs), className='info_box')
 
-    layout_children = [info_box,train_graph, run_mean_graph, train_perf_graph,
+    # layout_children = [info_box, train_graph, run_mean_graph, train_perf_graph,
+    #                    train_loss_graph, exploration_graph, experience_graph,
+    #                    best_policy_graph, last_policy_graph]
+    layout_children = [info_box, train_graph, train_perf_graph,
                        train_loss_graph, exploration_graph, experience_graph,
                        best_policy_graph, last_policy_graph]
+
     if len(q_val_dev_data) > 0:
         layout_children.append(q_val_dev_graph)
     if len(policy_eval_data) > 0:
@@ -712,7 +756,7 @@ def visualize_results(result_path, host, port):
             if os.path.isdir(os.path.join(result_path, o))]
     index_children = []
     layouts = {}
-    reward_colors = {'reward': Color(pick_for='reward', saturation=0.5, luminance=0.5).get_hex()}
+    # solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
     for env, env_path in envs:
         layouts[env] = {}
         best_x_path = os.path.join(env_path, 'x_data_best.p')
@@ -741,6 +785,9 @@ def visualize_results(result_path, host, port):
             env_list.append(train_page)
             env_list.append(html.Br())
 
+        _colors = copy.deepcopy(cl.scales['8']['qual']['Dark2'])
+        reward_colors = {'reward': _colors.pop()}
+
         for x_path in [best_x_path, last_x_path]:
             if os.path.exists(x_path):
                 suffix = x_path.split('_')[-1].split('.')[0]
@@ -751,7 +798,10 @@ def visualize_results(result_path, host, port):
 
                 for rt in x_data['reward_types']:
                     if rt not in reward_colors:
-                        reward_colors[rt] = Color(pick_for=rt, saturation=0.5, luminance=0.5).get_hex()
+                        if len(_colors) != 0:
+                            reward_colors[rt] = _colors.pop()
+                        else:
+                            reward_colors[rt] = Color(pick_for=rt, saturation=0.5, luminance=0.5).get_hex()
 
                 layouts[_path] = x_layout(app, x_data['data'], reward_colors,
                                           x_data['actions'], prefix)

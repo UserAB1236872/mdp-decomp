@@ -8,6 +8,10 @@ class DRSarsa(_BaseTableLearner):
                  use_decomposition=True):
         super().__init__(env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps, use_decomposition)
 
+    @property
+    def __name__(self):
+        return 'drSarsa' if self.use_decomposition else 'sarsa'
+
     def _update(self, state, action, next_state, next_state_action, reward, done):
         for rt, r in enumerate(reward):
             target = r

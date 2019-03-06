@@ -3,6 +3,8 @@ import numpy as np
 from .graphics import plot
 from .graphics import visualize_results as vr
 import pickle
+
+import hickle as hkl
 import torch.multiprocessing as mp
 
 try:
@@ -208,9 +210,10 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
 
-def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False, suffix='_best.p'):
+def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False, suffix='_best'):
     data = {}
     # evaluate each solver
+    suffix += '.p'
     for solver_fn in solvers_fn:
         solver = solver_fn()
         env.seed(0)
@@ -225,12 +228,13 @@ def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False, su
     return data
 
 
-def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, suffix='_best.p'):
+def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, suffix='_best'):
     data = {}
     for solver in solvers:
         solver_name = solver.__name__
-        solver.restore(os.path.join(result_path, solver_name + suffix))
+        solver.restore(os.path.join(result_path, solver_name + suffix+'.p'))
 
+    suffix += '.p'
     env.seed(0)
     for base_solver in solvers:
         base_solver_name = base_solver.__name__
@@ -276,7 +280,9 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, suffix='_b
         data[base_solver_name] = {'episodes': solver_data, 'reward_types': base_solver.reward_types}
 
     _data = {'data': data, 'reward_types': sorted(env.reward_types), 'actions': env.action_meanings}
+    pickle.fast = True
     pickle.dump(_data, open(os.path.join(result_path, 'x_data' + suffix), 'wb'))
+    # hkl.dump(_data, os.path.join(result_path, 'x_data' + suffix), mode='w',compression='gzip')
 
 
 def visualize_results(result_path, host, port):

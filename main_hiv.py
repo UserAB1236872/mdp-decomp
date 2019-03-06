@@ -114,12 +114,12 @@ if __name__ == '__main__':
         monitor.run(env_fn(), solvers_fn, args.runs, args.total_episodes, args.eval_episodes, args.episode_max_steps,
                     args.train_interval, result_path=args.env_result_dir, planner_fn=None)
     if args.test:
-        for suffix in ['_best.p', '_last.p']:
+        for suffix in ['_best', '_last']:
             result = monitor.eval(env_fn(), solvers_fn, args.eval_episodes, args.episode_max_steps, render=False,
                                   result_path=args.env_result_dir, suffix=suffix)
             print(result)
     if args.eval_msx:
-        for suffix in ['_best.p', '_last.p']:
+        for suffix in ['_best', '_last']:
             solvers = [s() for s in solvers_fn]
             monitor.eval_msx(env_fn(), solvers, args.eval_episodes, args.episode_max_steps,
                              result_path=args.env_result_dir, suffix=suffix)

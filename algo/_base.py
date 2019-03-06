@@ -35,7 +35,7 @@ class _Base:
                         rdx[a][a_dash][rt] = q_values[rt_i][a] - q_values[rt_i][a_dash]
                         if rdx[a][a_dash][rt] < 0:
                             neg_rdx.append((rdx[a][a_dash][rt], rt))
-                            msx[a][a_dash][1].append(rt)
+                            # msx[a][a_dash][1].append(rt)
                         else:
                             pos_rdx.append((rdx[a][a_dash][rt], rt))
                     pos_rdx = sorted(pos_rdx, reverse=True)
@@ -50,6 +50,18 @@ class _Base:
                             msx[a][a_dash][0].append(rt)
                             if msx_sum > abs(neg_rdx_sum):
                                 break
+
+                        # create minimal neg_rdx:
+                        neg_rdx = sorted(neg_rdx, reverse=True)
+                        # pos msx is already sorted in reverse order
+                        _minimal_sum = pos_rdx_sum - rdx[a][a_dash][msx[a][a_dash][0][-1]]
+                        _sum = 0
+                        for v, rt in neg_rdx:
+                            _sum += v
+                            msx[a][a_dash][1].append(rt)
+                            if _sum > _minimal_sum:
+                                break
+
                     msx[a][a_dash] = tuple(msx[a][a_dash])
 
         return rdx, msx
@@ -190,7 +202,7 @@ class _BaseDeepLearner(_BaseLearner):
             self.model = self.model.cuda()
             self.target_model = self.target_model.cuda()
 
-        self.optimizer = Adam(self.model.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
 
         self.step_count = 0
 

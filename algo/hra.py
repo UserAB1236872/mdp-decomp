@@ -58,6 +58,11 @@ class HRA(_BaseDeepLearner):
                 non_final_target = self.target_model(non_final_next_state_batch, rt).max(1)[0].detach().unsqueeze(1)
                 target_q[non_final_mask] = non_final_target
                 target_q = reward + self.discount * target_q
+                if _ == 'cliff':
+                    pass
+                    # print(torch.cat((predicted_q, target_q), dim=1).data.numpy().tolist())
+                    # if (torch.cat((predicted_q, target_q), dim=1).data.numpy() > 0).any():
+                    #     print('stop')
                 loss += SmoothL1Loss()(predicted_q, target_q)
 
             # update the model
@@ -66,7 +71,7 @@ class HRA(_BaseDeepLearner):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 20)
             self.optimizer.step()
-
+            # print([[round(_,4) for _ in y] for y in self.model.model_0[-1].weight.data.numpy().tolist()])
             self.step_count += 1
 
             if (self.step_count % self.update_target_interval) == 0:
@@ -76,7 +81,6 @@ class HRA(_BaseDeepLearner):
         return None
 
     def train(self, episodes):
-        self.model.eval()
         train_loss = []
         perf = 0
         for ep in range(episodes):
@@ -105,5 +109,7 @@ class HRA(_BaseDeepLearner):
 
         train_loss = np.average(train_loss)
         perf /= episodes
-        self.model.eval()
         return perf, train_loss, self.linear_decay.eps, self.step_count
+
+# explore and add to experience buffer
+# train n-batches

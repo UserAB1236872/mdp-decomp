@@ -8,6 +8,10 @@ class DRQLearn(_BaseTableLearner):
                  use_decomposition=True):
         super().__init__(env, lr, discount, min_eps, max_eps, total_episodes, max_episode_steps, use_decomposition)
 
+    @property
+    def __name__(self):
+        return 'drQ learning' if self.use_decomposition else 'Q learning'
+
     def _update(self, state, action, next_state, reward, done):
         next_state_action = self.act(next_state)
         for rt, r in enumerate(reward):
