@@ -21,35 +21,47 @@ import shutil
 #         print(row)
 
 
-def test(env, solver, eps, eps_max_steps, render=False, verbose=False):
-    result = 0
-    for ep in range(eps):
-        logging.info("Ep %d of %d done (train)" % (ep, eps))
-        ep_reward, ep_steps = 0, 0
-        state = env.reset()
-        done = False
-        while not done:
-            if render:
-                print(env.render())
-            action, action_info = solver.act(state, debug=True)
-            state, reward, done, info = env.step(action)
-            if verbose:
-                q_values = action_info['q_values']
-                formated_q = np.concatenate((np.array(['*'] + env.action_meanings).reshape(1, 5),
-                                             np.concatenate((np.array(sorted(env.reward_types)).reshape(4, 1),
-                                                             np.round(q_values, 2)),
-                                                            axis=1)))
-                print('greedy action:{},\n Q-Values:{}\n Decomposed q_values: \n{}'.format(action,
-                                                                                           np.round(
-                                                                                               q_values.sum(0), 2),
-                                                                                           formated_q))
-                print('Reward: {} \n Reward Decomposition: {}\n\n'.format(
-                    reward, info['reward_decomposition']))
-            ep_reward += reward
-            ep_steps += 1
-            done = done if ep_steps <= eps_max_steps else True
-        result += ep_reward
-    return result / eps
+def test(env, solver, eps, eps_max_steps, render=False, verbose=False, max_fails=5):
+    result = np.zeros(eps)
+    ep = 0
+    fails = 0
+    while ep < eps:
+        try:
+            logging.info("Ep %d of %d done (train)" % (ep, eps))
+            ep_reward, ep_steps = 0, 0
+            state = env.reset()
+            done = False
+            while not done:
+                if render:
+                    print(env.render())
+                action, action_info = solver.act(state, debug=True)
+                state, reward, done, info = env.step(action)
+                if verbose:
+                    q_values = action_info['q_values']
+                    formated_q = np.concatenate((np.array(['*'] + env.action_meanings).reshape(1, 5),
+                                                np.concatenate((np.array(sorted(env.reward_types)).reshape(4, 1),
+                                                                np.round(q_values, 2)),
+                                                                axis=1)))
+                    print('greedy action:{},\n Q-Values:{}\n Decomposed q_values: \n{}'.format(action,
+                                                                                            np.round(
+                                                                                                q_values.sum(0), 2),
+                                                                                            formated_q))
+                    print('Reward: {} \n Reward Decomposition: {}\n\n'.format(
+                        reward, info['reward_decomposition']))
+                ep_reward += reward
+                ep_steps += 1
+                done = done if ep_steps <= eps_max_steps else True
+            result[ep] = ep_reward
+            ep += 1
+        except Exception as e:
+            fails += 1
+            if fails >= max_fails:
+                logging.fatal("Reached max failures %d / %d on episode %d / %d with error %s" % (fails, max_fails, ep+1, eps, e))
+                os.abort()
+            
+            logging.error("Failure %d / %d on episode %d / %d; retrying. Got error %s" % (fails, max_fails, ep+1, eps, e))
+
+    return result
 
 
 def calculate_q_val_dev(env, source, target):
@@ -130,7 +142,7 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
             # evaluate each solver
             for solver in solvers:
                 solver_name = type(solver).__name__
-                perf = test(env, solver, eval_eps, eps_max_steps)
+                perf = np.average(test(env, solver, eval_eps, eps_max_steps))
                 if planner is not None:
                     dev = calculate_q_val_dev(env, planner, solver)
                     info['q_val_dev'][solver_name][run].append(dev)
@@ -160,12 +172,13 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                 solver_name = type(solver).__name__
                 solver.save(os.path.join(
                     checkpoint_path, 'train_' + solver_name) + '.p', train_checkpoint=True)
+                solver.save(os.path.join(
+                    result_path, 'latest_' + solver_name) + '.p')
+
 
             just_loaded = False
         run += 1
 
-        # Cleanup training checkpoints
-        shutil.rmtree(checkpoint_path, ignore_errors=True)
         _test_data, _test_run_mean = {}, {}
         _q_val_dev_data = {}
         for solver in solvers:
@@ -199,16 +212,19 @@ def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False):
         else:
             data[solver_name] = [perf]
 
-    data = {k: np.average(v) for k, v in data.items()}
+    data = {k: {"avg": np.average(v), "stddev": np.std(v)} for k, v in data.items()}
 
     return data
 
 
-def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
+def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, render_mode='print', is_scaii=False):
     data = {}
     for solver in solvers:
         solver_name = type(solver).__name__
         solver.restore(os.path.join(result_path, solver_name + '.p'))
+
+    if is_scaii:
+        env.record = True
 
     env.seed(0)
     for base_solver in solvers:
@@ -220,22 +236,27 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
             steps, done = 0, False
             ep_data = []
 
-            state_info = {'state': env.render(mode='print'), 'solvers': {}, 'terminal': done,
+            state_info = {'state': env.render(mode=render_mode), 'solvers': {}, 'terminal': done,
                           'reward': {_: 0 for _ in env.reward_types}}
             for solver in solvers:
                 solver_name = type(solver).__name__
                 _action, _action_info = solver.act(state, debug=True)
+
                 state_info['solvers'][solver_name] = _action_info
                 state_info['solvers'][solver_name]['action'] = _action
             ep_data.append(state_info)
 
             while not done:
                 action = state_info['solvers'][base_solver_name]['action']
-                state, reward, done, step_info = env.step(action)
+                if not is_scaii:
+                    state, reward, done, step_info = env.step(action)
+                else:
+                    state, reward, done, step_info = env.step(
+                        action, q_vals=scaii_q_vals(state_info, base_solver_name, env.reward_types))
                 done = done or (steps >= eps_max_steps)
                 steps += 1
                 ep_reward += reward
-                state_info = {'state': env.render(mode='print'), 'solvers': {}, 'terminal': done,
+                state_info = {'state': env.render(mode=render_mode), 'solvers': {}, 'terminal': done,
                               'reward': step_info['reward_decomposition']}
                 for solver in solvers:
                     solver_name = type(solver).__name__
@@ -245,11 +266,26 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path):
                 ep_data.append(state_info)
 
             solver_data.append({'data': ep_data, 'score': ep_reward})
+
+            if is_scaii:
+                backup_scaii_replay(base_solver_name, ep)
         data[base_solver_name] = solver_data
 
     _data = {'data': data, 'reward_types': sorted(
         env.reward_types), 'actions': env.action_meanings}
     pickle.dump(_data, open(os.path.join(result_path, 'x_data.p'), 'wb'))
+
+
+def scaii_q_vals(state_info, solver_name, reward_types):
+    q_vals = state_info['solvers'][solver_name]['q_values']
+    return {r_type: q_vals for (r_type, q_vals) in zip(reward_types, q_vals)}
+
+
+def backup_scaii_replay(solver_name, ep):
+    from gym_decomp.scaii import REPLAY_PATH
+    replay = REPLAY_PATH / "replay.scr"
+    target = REPLAY_PATH / ("replay_%s_%d.scr" % (solver_name, ep))
+    replay.rename(target)
 
 
 def visualize_results(result_path, host, port):

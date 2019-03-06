@@ -116,9 +116,9 @@ if __name__ == '__main__':
         solvers = [dr_dsarsa_solver_fn(),
                    dr_dqn_solver_fn()]
         if not args.no_hra:
-            solvers.append(hra_solver_fn)
+            solvers.append(hra_solver_fn())
         monitor.eval_msx(env_fn(), solvers, args.eval_episodes,
-                         args.episode_max_steps, result_path=args.env_result_dir)
+                         args.episode_max_steps, result_path=args.env_result_dir, is_scaii=True)
     if args.visualize_results:
         monitor.visualize_results(
             result_path=args.result_dir, port=args.port, host=args.host)

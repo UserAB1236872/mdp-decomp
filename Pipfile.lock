@@ -136,7 +136,7 @@
         },
         "gym-decomp": {
             "git": "https://github.com/Zaerei/gym_decomp",
-            "ref": "97851fff61097985a985e25750fc06eb08abf32f"
+            "ref": "4921995310712c7731a561ba592d1e1f67bbeb17"
         },
         "idna": {
             "hashes": [
@@ -472,14 +472,6 @@
             ],
             "index": "pypi",
             "version": "==1.4.3"
-        },
-        "colorama": {
-            "hashes": [
-                "sha256:05eed71e2e327246ad6b38c540c4a3117230b19679b875190486ddd2d721422d",
-                "sha256:f8ac84de7840f5b9c4e3347b3c1eaa50f7e49c2b07596221daec5edaabbd7c48"
-            ],
-            "markers": "sys_platform == 'win32'",
-            "version": "==0.4.1"
         },
         "isort": {
             "hashes": [
