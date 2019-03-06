@@ -336,7 +336,8 @@ def x_layout(app, data, reward_colors, actions, prefix):
                           }],
                 'layout': {
                     'title': solver,
-                    'showgrid': True
+                    'showgrid': True,
+                    'yaxis': {'title': 'q-values'}
                 }
             }
             return figure
@@ -367,6 +368,7 @@ def x_layout(app, data, reward_colors, actions, prefix):
                     'title': solver,
                     'showgrid': True,
                     'showlegend': True,
+                    'yaxis': {'title': 'q-values'}
                 }
             }
             return figure
@@ -423,7 +425,7 @@ def x_layout(app, data, reward_colors, actions, prefix):
                 'layout': {
                     'title': solver,
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
                 }
             }
             return figure
@@ -466,7 +468,7 @@ def x_layout(app, data, reward_colors, actions, prefix):
             pos_rt_data.sort(key=lambda x: x['y'][0], reverse=True)
             neg_rt_data.sort(key=lambda x: x['y'][0], reverse=True)
 
-            fig = tools.make_subplots(rows=1, cols=2, subplot_titles=('+ve', '-ve'), shared_yaxes=True)
+            fig = tools.make_subplots(rows=1, cols=2, subplot_titles=('msx +ve', 'msx -ve'), shared_yaxes=True)
             for _rt_data in pos_rt_data:
                 fig.append_trace(_rt_data, 1, 1)
             for _rt_data in neg_rt_data:
@@ -482,7 +484,7 @@ def x_layout(app, data, reward_colors, actions, prefix):
 
 def train_page_layout(app, train_data, train_perf_data, exploration_data, experience_data, train_loss_data,
                       run_mean_data, q_val_dev_data, policy_eval_data, test_best_data, test_last_data, solvers, runs=1,
-                      prefix=''):
+                      prefix='', interval=1):
     solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
     train_traces, run_mean_traces, q_val_dev_traces, policy_eval_traces, best_policy_test_data = [], [], [], [], []
     last_policy_test_data = []
@@ -507,7 +509,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
     for solver in sorted(solvers):
         # -----------new addition -----
         train_perf_trace = {
-            'x': [_ + 1 for _ in range(len(train_perf_data[solver]))],
+            'x': np.array([_ + 1 for _ in range(len(train_perf_data[solver]))]) * interval,
             'y': train_perf_data[solver],
             'type': 'scatter',
             'mode': 'lines',
@@ -515,7 +517,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
             'line': {'color': solver_colors[solver]}
         }
         exploration_trace = {
-            'x': [_ + 1 for _ in range(len(exploration_data[solver]))],
+            'x': np.array([_ + 1 for _ in range(len(exploration_data[solver]))]) * interval,
             'y': exploration_data[solver],
             'type': 'scatter',
             'mode': 'lines',
@@ -523,7 +525,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
             'line': {'color': solver_colors[solver]}
         }
         experiance_trace = {
-            'x': [_ + 1 for _ in range(len(experience_data[solver]))],
+            'x': np.array([_ + 1 for _ in range(len(experience_data[solver]))]) * interval,
             'y': experience_data[solver],
             'type': 'scatter',
             'mode': 'lines',
@@ -532,7 +534,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
         }
 
         train_loss_trace = {
-            'x': [_ + 1 for _ in range(len(train_loss_data[solver]))],
+            'x': np.array([_ + 1 for _ in range(len(train_loss_data[solver]))]) * interval,
             'y': train_loss_data[solver],
             'type': 'scatter',
             'mode': 'lines',
@@ -542,7 +544,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
 
         # --------------------------------
         train_trace = {
-            'x': [_ + 1 for _ in range(len(train_data[solver]))],
+            'x': np.array([_ + 1 for _ in range(len(train_data[solver]))]) * interval,
             'y': train_data[solver],
             'type': 'scatter',
             'mode': 'lines',
@@ -559,7 +561,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
         # }
         if solver in q_val_dev_data:
             q_val_dev_trace = {
-                'x': [_ + 1 for _ in range(len(q_val_dev_data[solver]))],
+                'x': np.array([_ + 1 for _ in range(len(q_val_dev_data[solver]))])*interval,
                 'y': q_val_dev_data[solver],
                 'type': 'scatter',
                 'mode': 'lines',
@@ -569,7 +571,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
             q_val_dev_traces.append(q_val_dev_trace)
         if solver in policy_eval_data:
             policy_eval_trace = {
-                'x': [_ + 1 for _ in range(len(policy_eval_data[solver]))],
+                'x': np.array([_ + 1 for _ in range(len(policy_eval_data[solver]))])*interval,
                 'y': policy_eval_data[solver],
                 'type': 'scatter',
                 'mode': 'lines',
@@ -611,7 +613,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Training Episodes Score',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
@@ -623,7 +627,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Exploration Rate',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'epsilon'}
                 }
             }
         )])
@@ -635,7 +641,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Experiance',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Memory Size'}
                 }
             }
         )])
@@ -647,7 +655,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Training Loss',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': ''}
                 }
             }
         )])
@@ -660,7 +670,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Testing Score',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
@@ -684,7 +696,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Q value Deviation',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Q-value Deviation'}
                 }
             }
         )])
@@ -696,7 +710,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Policy Evaluation Deviation',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Q-value Deviation'}
                 }
             }
         )])
@@ -708,7 +724,8 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Evaluation of Best Policy',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
@@ -720,7 +737,8 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Evaluation of Last Policy',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
@@ -781,7 +799,8 @@ def visualize_results(result_path, host, port):
             env_list.append(train_page)
             env_list.append(html.Br())
 
-        _colors = copy.deepcopy(cl.scales['12']['qual']['Set3'])
+        # solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
+        _colors = copy.deepcopy(cl.scales['8']['qual']['Dark2'])
         reward_colors = {'reward': _colors.pop()}
 
         for x_path in [best_x_path, last_x_path]:

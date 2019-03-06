@@ -52,9 +52,12 @@ class _Base:
                                 break
 
                         # create minimal neg_rdx:
-                        neg_rdx = sorted(neg_rdx, reverse=True)
+                        neg_rdx = sorted(neg_rdx)
                         # pos msx is already sorted in reverse order
-                        _minimal_sum = pos_rdx_sum - rdx[a][a_dash][msx[a][a_dash][0][-1]]
+                        if len(msx[a][a_dash][0])>1:
+                            _minimal_sum = pos_rdx_sum - rdx[a][a_dash][msx[a][a_dash][0][-1]]
+                        else:
+                            _minimal_sum = float('-inf')
                         _sum = 0
                         for v, rt in neg_rdx:
                             _sum += v
