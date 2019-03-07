@@ -40,7 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--runs', type=int, default=1, help='Experiment Repetition Count')
     parser.add_argument('--discount', type=float, default=0.99, help=' Discount')
     parser.add_argument('--mem_len', type=float, default=100000, help=' Size of Experience Replay Memory')
-    parser.add_argument('--batch_size', type=float, default=512, help=' Batch size ')
+    parser.add_argument('--batch_size', type=float, default=64, help=' Batch size ')
     parser.add_argument('--update_target_interval', type=float, default=100, help=' Batch size ')
     parser.add_argument('--episode_max_steps', type=float, default=50, help='Maximum Number of steps in an episode')
     parser.add_argument('--train', action='store_true', default=False, help=' Trains all the solvers for given env.')
@@ -83,31 +83,34 @@ if __name__ == '__main__':
     dqn_solver_fn = lambda: DRDQN(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                   args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda,
                                   max_episode_steps=args.episode_max_steps, use_decomposition=False,
-                                 update_target_interval=args.update_target_interval)
+                                  update_target_interval=args.update_target_interval)
     dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), model_fn(), args.lr, args.discount, args.mem_len,
                                         args.batch_size, args.min_eps, args.max_eps, args.total_episodes,
                                         use_cuda=args.cuda, max_episode_steps=args.episode_max_steps,
-                                        use_decomposition=False,update_target_interval=args.update_target_interval)
+                                        use_decomposition=False, update_target_interval=args.update_target_interval)
 
     dr_dqn_solver_fn = lambda: DRDQN(env_fn(), dr_model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                      args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda,
-                                     max_episode_steps=args.episode_max_steps,update_target_interval=args.update_target_interval)
+                                     max_episode_steps=args.episode_max_steps,
+                                     update_target_interval=args.update_target_interval)
 
     dr_dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), dr_model_fn(), args.lr, args.discount, args.mem_len,
                                            args.batch_size, args.min_eps, args.max_eps, args.total_episodes,
                                            use_cuda=args.cuda, max_episode_steps=args.episode_max_steps,
-                                          update_target_interval=args.update_target_interval)
+                                           update_target_interval=args.update_target_interval)
 
     unhra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                   args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda,
-                                  max_episode_steps=args.episode_max_steps,update_target_interval=args.update_target_interval,
+                                  max_episode_steps=args.episode_max_steps,
+                                  update_target_interval=args.update_target_interval,
                                   use_decomposition=False)
     hra_solver_fn = lambda: HRA(env_fn(), dr_model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                 args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda,
-                                max_episode_steps=args.episode_max_steps,update_target_interval=args.update_target_interval)
+                                max_episode_steps=args.episode_max_steps,
+                                update_target_interval=args.update_target_interval)
 
-    solvers_fn = [dqn_solver_fn, dr_dqn_solver_fn, dsarsa_solver_fn,dr_dsarsa_solver_fn,unhra_solver_fn, hra_solver_fn]
-    # solvers_fn=[dr_dqn_solver_fn]
+    solvers_fn = [dr_dqn_solver_fn, dr_dsarsa_solver_fn, hra_solver_fn]
+
     # Fire it up!
     if args.train:
         planner_fn = (lambda: DRQIteration(env_fn(), args.discount)) if args.use_planner else None

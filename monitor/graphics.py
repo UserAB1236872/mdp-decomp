@@ -101,6 +101,8 @@ def x_layout(app, data, reward_colors, actions, prefix):
 
     solver_dropdown_options = []
     for solver in solvers:
+        if type(data[solver]).__name__ == 'list':
+            data[solver] = {'episodes': data[solver]}
         for i, ep in enumerate(data[solver]['episodes']):
             option = {'label': str(i) + '- ' + solver + '- Score: ' + str(ep['score']),
                       'value': solver + '-' + str(i)}
@@ -508,49 +510,59 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
 
     for solver in sorted(solvers):
         # -----------new addition -----
-        train_perf_trace = {
-            'x': np.array([_ + 1 for _ in range(len(train_perf_data[solver]))]) * interval,
-            'y': train_perf_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
-        exploration_trace = {
-            'x': np.array([_ + 1 for _ in range(len(exploration_data[solver]))]) * interval,
-            'y': exploration_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
-        experiance_trace = {
-            'x': np.array([_ + 1 for _ in range(len(experience_data[solver]))]) * interval,
-            'y': experience_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        if solver in train_perf_data:
+            train_perf_trace = {
+                'x': np.array([_ + 1 for _ in range(len(train_perf_data[solver]))]) * interval,
+                'y': train_perf_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            train_perf_traces.append(train_perf_trace)
+        if solver in exploration_data:
+            exploration_trace = {
+                'x': np.array([_ + 1 for _ in range(len(exploration_data[solver]))]) * interval,
+                'y': exploration_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            exploration_traces.append(exploration_trace)
+        if solver in experience_data:
+            experiance_trace = {
+                'x': np.array([_ + 1 for _ in range(len(experience_data[solver]))]) * interval,
+                'y': experience_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            experiance_traces.append(experiance_trace)
 
-        train_loss_trace = {
-            'x': np.array([_ + 1 for _ in range(len(train_loss_data[solver]))]) * interval,
-            'y': train_loss_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        if solver in train_loss_data:
+            train_loss_trace = {
+                'x': np.array([_ + 1 for _ in range(len(train_loss_data[solver]))]) * interval,
+                'y': train_loss_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            train_loss_traces.append(train_loss_trace)
 
         # --------------------------------
-        train_trace = {
-            'x': np.array([_ + 1 for _ in range(len(train_data[solver]))]) * interval,
-            'y': train_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        if solver in train_data:
+            train_trace = {
+                'x': np.array([_ + 1 for _ in range(len(train_data[solver]))]) * interval,
+                'y': train_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            train_traces.append(train_trace)
         # run_mean_trace = {
         #     'x': [_ + 1 for _ in range(len(train_data[solver]))],
         #     'y': [np.average(train_data[solver][max(0, i - 10):i + 1]) for i in range(len(train_data[solver]) - 1)],
@@ -561,7 +573,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
         # }
         if solver in q_val_dev_data:
             q_val_dev_trace = {
-                'x': np.array([_ + 1 for _ in range(len(q_val_dev_data[solver]))])*interval,
+                'x': np.array([_ + 1 for _ in range(len(q_val_dev_data[solver]))]) * interval,
                 'y': q_val_dev_data[solver],
                 'type': 'scatter',
                 'mode': 'lines',
@@ -571,7 +583,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
             q_val_dev_traces.append(q_val_dev_trace)
         if solver in policy_eval_data:
             policy_eval_trace = {
-                'x': np.array([_ + 1 for _ in range(len(policy_eval_data[solver]))])*interval,
+                'x': np.array([_ + 1 for _ in range(len(policy_eval_data[solver]))]) * interval,
                 'y': policy_eval_data[solver],
                 'type': 'scatter',
                 'mode': 'lines',
@@ -597,12 +609,8 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'marker': {'color': solver_colors[solver]}
             }
             last_policy_test_data.append(last_policy_trace)
-        train_traces.append(train_trace)
+
         # run_mean_traces.append(run_mean_trace)
-        train_loss_traces.append(train_loss_trace)
-        exploration_traces.append(exploration_trace)
-        experiance_traces.append(experiance_trace)
-        train_perf_traces.append(train_perf_trace)
 
     # ----- new addition --
     train_perf_graph = html.Div(className='graph_box', children=[
@@ -784,8 +792,12 @@ def visualize_results(result_path, host, port):
             _path = '/' + prefix
             train_page = dcc.Link(env + ': Training ', href=_path, className='page_url')
             train_data = pickle.load(open(train_path, 'rb'))
-            if 'policy_eval' not in train_data.keys():
-                train_data['policy_eval'] = {}
+
+            for unknown_key in ['policy_eval', 'train_perf', 'exploration', 'experience', 'train_loss', 'run_mean',
+                                'q_val_dev']:
+                if unknown_key not in train_data.keys():
+                    train_data[unknown_key] = {}
+
             best_test_data = pickle.load(open(best_test_path, 'rb')) if os.path.exists(best_test_path) else {}
             last_test_data = pickle.load(open(last_test_path, 'rb')) if os.path.exists(last_test_path) else {}
             layouts[_path] = train_page_layout(app, train_data['data'], train_data['train_perf'],

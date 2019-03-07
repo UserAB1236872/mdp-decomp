@@ -16,7 +16,9 @@ class DRModel(nn.Module):
         self.state_size = state_size
 
         for rt in range(reward_types):
-            model = nn.Sequential(nn.Linear(state_size, actions))
+            model = nn.Sequential(nn.Linear(state_size, 64),
+                                  nn.ReLU(),
+                                  nn.Linear(64, actions))
             model[-1].weight.data.fill_(0)
             model[-1].bias.data.fill_(0)
             setattr(self, 'model_{}'.format(rt), model)
@@ -59,8 +61,8 @@ if __name__ == '__main__':
     parser.add_argument('--use_planner', action='store_true', default=False,
                         help='Use planner for ground truth estimation of q-values (only used in table methods)')
 
-    np.random.seed(0)
-    torch.manual_seed(0)
+    np.random.seed(1)
+    torch.manual_seed(1)
     args = parser.parse_args()
     args.cuda = (not args.no_cuda) and torch.cuda.is_available()
     args.env_result_dir = os.path.join(args.result_dir, args.env)
@@ -90,7 +92,8 @@ if __name__ == '__main__':
 
     dr_dqn_solver_fn = lambda: DRDQN(env_fn(), dr_model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                      args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda,
-                                     max_episode_steps=args.episode_max_steps, update_target_interval=args.update_target_interval)
+                                     max_episode_steps=args.episode_max_steps,
+                                     update_target_interval=args.update_target_interval)
 
     dr_dsarsa_solver_fn = lambda: DRDSarsa(env_fn(), dr_model_fn(), args.lr, args.discount, args.mem_len,
                                            args.batch_size, args.min_eps, args.max_eps, args.total_episodes,
@@ -99,14 +102,18 @@ if __name__ == '__main__':
 
     unhra_solver_fn = lambda: HRA(env_fn(), model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                   args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda,
-                                  max_episode_steps=args.episode_max_steps, update_target_interval=args.update_target_interval,
+                                  max_episode_steps=args.episode_max_steps,
+                                  update_target_interval=args.update_target_interval,
                                   use_decomposition=False)
     hra_solver_fn = lambda: HRA(env_fn(), dr_model_fn(), args.lr, args.discount, args.mem_len, args.batch_size,
                                 args.min_eps, args.max_eps, args.total_episodes, use_cuda=args.cuda,
-                                max_episode_steps=args.episode_max_steps, update_target_interval=args.update_target_interval)
+                                max_episode_steps=args.episode_max_steps,
+                                update_target_interval=args.update_target_interval)
 
-    solvers_fn = [dqn_solver_fn, dr_dqn_solver_fn, unhra_solver_fn, hra_solver_fn, dsarsa_solver_fn,
-                  dr_dsarsa_solver_fn]
+    # solvers_fn = [dqn_solver_fn, dr_dqn_solver_fn, unhra_solver_fn, hra_solver_fn, dsarsa_solver_fn,
+    #               dr_dsarsa_solver_fn]
+    # solvers_fn = [dr_dqn_solver_fn, hra_solver_fn, dr_dsarsa_solver_fn]
+    solvers_fn = [dr_dqn_solver_fn]
 
     # Fire it up!
     if args.train:
@@ -118,7 +125,7 @@ if __name__ == '__main__':
                                   result_path=args.env_result_dir, suffix=suffix)
             print(result)
     if args.eval_msx:
-        for suffix in ['_best','_last']:
+        for suffix in ['_best', '_last']:
             solvers = [s() for s in solvers_fn]
             monitor.eval_msx(env_fn(), solvers, args.eval_episodes, args.episode_max_steps,
                              result_path=args.env_result_dir, suffix=suffix)

@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 from .graphics import plot
 from .graphics import visualize_results as vr
@@ -167,10 +168,11 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
 
                 solver.save(os.path.join(result_path, solver_name + '_last.p'))
 
-            _msg = 'Run {} : {}/{}' \
+            curr_eps += interval
+            _msg = '{} Run {} : {}/{}' \
                    ' Test[Current Score: {} Best Score:{}]' \
                    ' Train [ Current Performance:{} Exploration:{} Loss:{} Experiance: {}'
-            print(_msg.format(run, curr_eps, max_eps,
+            print(_msg.format(time.asctime(), run, curr_eps, max_eps,
                               [(k, round(info['test'][k][run][-1], 2)) for k in sorted(info['test'].keys())],
                               [(k, round(info['best_test'][k], 2)) for k in sorted(info['best_test'].keys())],
                               [(k, round(info['train_perf'][k][run][-1], 2)) for k in
@@ -182,7 +184,7 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                               [(k, round(info['experience_steps'][k][run][-1], 2)) for k in
                                sorted(info['experience_steps'].keys())]
                               ))
-            curr_eps += interval
+
 
         _train_perf_data, _exploration_data, _experience_steps_data, _train_loss_data = {}, {}, {}, {}
         _test_data, _test_run_mean = {}, {}
@@ -232,7 +234,7 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, suffix='_b
     data = {}
     for solver in solvers:
         solver_name = solver.__name__
-        solver.restore(os.path.join(result_path, solver_name + suffix+'.p'))
+        solver.restore(os.path.join(result_path, solver_name + suffix + '.p'))
 
     suffix += '.p'
     env.seed(0)
