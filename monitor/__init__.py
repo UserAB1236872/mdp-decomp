@@ -190,8 +190,18 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
         _test_data, _test_run_mean = {}, {}
 
         _q_val_dev_data, _policy_eval_data = {}, {}
-        for solver in solvers:
-            solver_name = solver.__name__
+
+        info_path = os.path.join(result_path, 'info_train.p')
+        if os.path.exists(info_path):
+            _info = pickle.load(open(info_path, 'rb'))
+            for k in info.keys():
+                for s in _info[k]:
+                    if s not in info[k]:
+                        info[k][s] = _info[k][s]
+
+        pickle.dump(info, open(info_path, 'wb'))
+
+        for solver_name in info['test'].keys():
             _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
             _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
             _train_perf_data[solver_name] = np.average(info['train_perf'][solver_name][:run + 1], axis=0)

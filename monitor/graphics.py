@@ -507,7 +507,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
     #                 value=0,
     #             )])
     #     )
-
+    interval=25
     for solver in sorted(solvers):
         # -----------new addition -----
         if solver in train_perf_data:

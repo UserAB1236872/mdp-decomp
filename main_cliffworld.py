@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_interval', type=int, default=25, help='No. of Episodes per training interval')
     parser.add_argument('--runs', type=int, default=1, help='Experiment Repetition Count')
     parser.add_argument('--discount', type=float, default=0.99, help=' Discount')
-    parser.add_argument('--mem_len', type=float, default=100000, help=' Size of Experience Replay Memory')
+    parser.add_argument('--mem_len', type=int, default=100000, help=' Size of Experience Replay Memory')
     parser.add_argument('--batch_size', type=float, default=64, help=' Batch size ')
     parser.add_argument('--update_target_interval', type=float, default=100, help=' Batch size ')
     parser.add_argument('--episode_max_steps', type=float, default=50, help='Maximum Number of steps in an episode')
