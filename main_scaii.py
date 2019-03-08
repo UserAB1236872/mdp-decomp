@@ -19,8 +19,9 @@ class DRModel(nn.Module):
         self.state_size = state_size
 
         for rt in range(reward_types):
-            model = nn.Sequential(nn.Linear(state_size, 256, bias=False),
-                                  nn.Linear(256, actions, bias=False))
+            model = nn.Sequential(nn.Linear(state_size, 256, bias=True),
+                                  nn.ReLU(),
+                                  nn.Linear(256, actions, bias=True))
             setattr(self, 'model_{}'.format(rt), model)
 
     def forward(self, input, r_type):

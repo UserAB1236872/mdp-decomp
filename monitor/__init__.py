@@ -1,8 +1,11 @@
 import os
+import time
 import numpy as np
 from .graphics import plot
 from .graphics import visualize_results as vr
 import pickle
+
+import hickle as hkl
 import torch.multiprocessing as mp
 
 try:
@@ -205,10 +208,11 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
 
                 solver.save(os.path.join(result_path, solver_name + '_last.p'))
 
-            _msg = 'Run {} : {}/{}' \
+            curr_eps += interval
+            _msg = '{} Run {} : {}/{}' \
                    ' Test[Current Score: {} Best Score:{}]' \
                    ' Train [ Current Performance:{} Exploration:{} Loss:{} Experiance: {}'
-            print(_msg.format(run, curr_eps, max_eps,
+            print(_msg.format(time.asctime(), run, curr_eps, max_eps,
                               [(k, round(info['test'][k][run][-1], 2)) for k in sorted(info['test'].keys())],
                               [(k, round(info['best_test'][k], 2)) for k in sorted(info['best_test'].keys())],
                               [(k, round(info['train_perf'][k][run][-1], 2)) for k in
@@ -220,7 +224,7 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
                               [(k, round(info['experience_steps'][k][run][-1], 2)) for k in
                                sorted(info['experience_steps'].keys())]
                               ))
-            curr_eps += interval
+
 
             # Dump training state to disk in case of crashes
             ser_info = {'info': info, 'run': run, 'curr_eps': curr_eps}
@@ -243,16 +247,16 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
         _q_val_dev_data, _policy_eval_data = {}, {}
         for solver in solvers:
             solver_name = solver.__name__
-            _test_data[solver_name] = np.average(info['test'][solver_name][:run + 1], axis=0)
-            _test_run_mean[solver_name] = np.average(info['test_run_mean'][solver_name][:run + 1], axis=0)
-            _train_perf_data[solver_name] = np.average(info['train_perf'][solver_name][:run + 1], axis=0)
-            _exploration_data[solver_name] = np.average(info['exploration_eps'][solver_name][:run + 1], axis=0)
-            _experience_steps_data[solver_name] = np.average(info['experience_steps'][solver_name][:run + 1], axis=0)
-            _train_loss_data[solver_name] = np.average(info['train_loss'][solver_name][:run + 1], axis=0)
+            _test_data[solver_name] = np.average(np.array(info['test'][solver_name][:run]), axis=0)
+            _test_run_mean[solver_name] = np.average(np.array(info['test_run_mean'][solver_name][:run]), axis=0)
+            _train_perf_data[solver_name] = np.average(np.array(info['train_perf'][solver_name][:run]), axis=0)
+            _exploration_data[solver_name] = np.average(np.array(info['exploration_eps'][solver_name][:run]), axis=0)
+            _experience_steps_data[solver_name] = np.average(np.array(info['experience_steps'][solver_name][:run]), axis=0)
+            _train_loss_data[solver_name] = np.average(np.array(info['train_loss'][solver_name][:run]), axis=0)
 
             if planner_fn is not None:
-                _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run + 1], axis=0)
-                _policy_eval_data[solver_name] = np.average(info['policy_eval'][solver_name][:run + 1], axis=0)
+                _q_val_dev_data[solver_name] = np.average(info['q_val_dev'][solver_name][:run], axis=0)
+                _policy_eval_data[solver_name] = np.average(info['policy_eval'][solver_name][:run], axis=0)
 
         _data = {'data': _test_data, 'run_mean': _test_run_mean, 'q_val_dev': _q_val_dev_data,
                  'policy_eval': _policy_eval_data, 'runs': runs,
@@ -263,9 +267,10 @@ def run(env, solvers_fn, runs, max_eps, eval_eps, eps_max_steps, interval, resul
         plot(_test_data, _test_run_mean, os.path.join(result_path, 'report.html'))
 
 
-def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False, suffix='_best.p'):
+def eval(env, solvers_fn, eval_eps, eps_max_steps, result_path, render=False, suffix='_best'):
     data = {}
     # evaluate each solver
+    suffix += '.p'
     for solver_fn in solvers_fn:
         solver = solver_fn()
         env.seed(0)
@@ -289,6 +294,7 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, render_mod
     if is_scaii:
         env.record = True
 
+    # suffix += '.p'
     env.seed(0)
     for base_solver in solvers:
         base_solver_name = base_solver.__name__
@@ -344,7 +350,9 @@ def eval_msx(env, solvers, eval_episodes, eps_max_steps, result_path, render_mod
         data[base_solver_name] = {'episodes': solver_data, 'reward_types': base_solver.reward_types}
 
     _data = {'data': data, 'reward_types': sorted(env.reward_types), 'actions': env.action_meanings}
+    pickle.fast = True
     pickle.dump(_data, open(os.path.join(result_path, 'x_data' + suffix), 'wb'))
+    # hkl.dump(_data, os.path.join(result_path, 'x_data' + suffix), mode='w',compression='gzip')
 
 
 def scaii_q_vals(state_info, solver_name, reward_types):

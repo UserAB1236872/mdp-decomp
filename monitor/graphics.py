@@ -18,6 +18,17 @@ from plotly import tools
 import pickle
 import numpy as np
 from PIL import Image
+import copy
+
+
+def smooth(scalars, weight=0.6):
+    last = scalars[0]
+    smoothed = list()
+    for point in scalars:
+        smoothed_val = last * weight + (1 - weight) * point
+        smoothed.append(smoothed_val)
+        last = smoothed_val
+    return smoothed
 
 
 def plot(perf_data, run_mean_data, file_path):
@@ -86,10 +97,12 @@ def x_layout(app, data, reward_colors, actions, prefix):
     graph_style = {}
     solvers = sorted(data.keys())
     game_area_style = {'width': '300px', 'float': 'left', 'position': 'fixed'}
-    graph_area_style = {'width': str(500 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
+    graph_area_style = {'width': str(1000 * (len(solvers) + 1)) + 'px', 'float': 'right', 'position': 'absolute'}
 
     solver_dropdown_options = []
     for solver in solvers:
+        if type(data[solver]).__name__ == 'list':
+            data[solver] = {'episodes': data[solver]}
         for i, ep in enumerate(data[solver]['episodes']):
             option = {'label': str(i) + '- ' + solver + '- Score: ' + str(ep['score']),
                       'value': solver + '-' + str(i)}
@@ -98,6 +111,12 @@ def x_layout(app, data, reward_colors, actions, prefix):
         id=prefix + 'solver_dropdown',
         options=solver_dropdown_options,
         value=solver_dropdown_options[0]['value']
+    )
+    frame_skip = dcc.Input(
+        placeholder='Frames to skip...',
+        type='number',
+        value=1,
+        id=prefix + 'frame_skip'
     )
     manager = {'n_clicks': {}, 'curr_solver_episode': solver_dropdown_options[0]['value']}
     action_options = []
@@ -112,7 +131,8 @@ def x_layout(app, data, reward_colors, actions, prefix):
                                   html.Span('0', id=prefix + 'curr_state'),
                                   html.Span('/'),
                                   html.Span(str(len(data) - 1), id=prefix + 'max_state'),
-                                  html.Button('Next State', id=prefix + 'next_state')
+                                  html.Button('Next State', id=prefix + 'next_state'),
+                                  frame_skip
                               ])
     manager['n_clicks'][prefix + 'prev_state'] = 0
     manager['n_clicks'][prefix + 'next_state'] = 0
@@ -221,17 +241,19 @@ def x_layout(app, data, reward_colors, actions, prefix):
          Input(component_id=prefix + 'next_state', component_property='n_clicks'),
          Input(component_id=prefix + 'solver_dropdown', component_property='value')],
         [State(component_id=prefix + 'curr_state', component_property='children'),
-         State(component_id=prefix + 'max_state', component_property='children')])
-    def update_state(prev_state_n_clicks, next_state_n_clicks, selected_solver_episode, curr_state, max_state):
+         State(component_id=prefix + 'max_state', component_property='children'),
+         State(component_id=prefix + 'frame_skip', component_property='value')])
+    def update_state(prev_state_n_clicks, next_state_n_clicks, selected_solver_episode, curr_state, max_state,
+                     frame_skip):
         if selected_solver_episode == manager['curr_solver_episode']:
             curr_state, max_state = int(curr_state), int(max_state)
             prev_state_n_clicks = 0 if prev_state_n_clicks is None else prev_state_n_clicks
             next_state_n_clicks = 0 if next_state_n_clicks is None else next_state_n_clicks
 
             if manager['n_clicks'][prefix + 'prev_state'] < prev_state_n_clicks:
-                curr_state = (curr_state - 1) if curr_state > 0 else 0
+                curr_state = (curr_state - frame_skip) if curr_state > 0 else 0
             elif manager['n_clicks'][prefix + 'next_state'] < next_state_n_clicks:
-                curr_state = min(curr_state + 1, max_state)
+                curr_state = min(curr_state + frame_skip, max_state)
             manager['n_clicks'][prefix + 'prev_state'] = prev_state_n_clicks
             manager['n_clicks'][prefix + 'next_state'] = next_state_n_clicks
         else:
@@ -316,7 +338,8 @@ def x_layout(app, data, reward_colors, actions, prefix):
                           }],
                 'layout': {
                     'title': solver,
-                    'showgrid': True
+                    'showgrid': True,
+                    'yaxis': {'title': 'q-values'}
                 }
             }
             return figure
@@ -346,7 +369,8 @@ def x_layout(app, data, reward_colors, actions, prefix):
                 'layout': {
                     'title': solver,
                     'showgrid': True,
-                    'showlegend': True
+                    'showlegend': True,
+                    'yaxis': {'title': 'q-values'}
                 }
             }
             return figure
@@ -403,7 +427,7 @@ def x_layout(app, data, reward_colors, actions, prefix):
                 'layout': {
                     'title': solver,
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
                 }
             }
             return figure
@@ -446,7 +470,7 @@ def x_layout(app, data, reward_colors, actions, prefix):
             pos_rt_data.sort(key=lambda x: x['y'][0], reverse=True)
             neg_rt_data.sort(key=lambda x: x['y'][0], reverse=True)
 
-            fig = tools.make_subplots(rows=1, cols=2, subplot_titles=('+ve', '-ve'), shared_yaxes=True)
+            fig = tools.make_subplots(rows=1, cols=2, subplot_titles=('msx +ve', 'msx -ve'), shared_yaxes=True)
             for _rt_data in pos_rt_data:
                 fig.append_trace(_rt_data, 1, 1)
             for _rt_data in neg_rt_data:
@@ -462,68 +486,94 @@ def x_layout(app, data, reward_colors, actions, prefix):
 
 def train_page_layout(app, train_data, train_perf_data, exploration_data, experience_data, train_loss_data,
                       run_mean_data, q_val_dev_data, policy_eval_data, test_best_data, test_last_data, solvers, runs=1,
-                      prefix=''):
+                      prefix='', interval=1):
     solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
     train_traces, run_mean_traces, q_val_dev_traces, policy_eval_traces, best_policy_test_data = [], [], [], [], []
     last_policy_test_data = []
     train_perf_traces, exploration_traces, train_loss_traces = [], [], []
     experiance_traces = []
+
+    # smooth_graph_ids = ['test_score', 'train_loss']
+    # smooth_sliders = []
+    # for _graph in smooth_graph_ids:
+    #     smooth_sliders.append(
+    #         html.Span(children=[
+    #             html.Span(children=' '.join(_graph.split('_'))),
+    #             dcc.Slider(
+    #                 id=prefix + '-' + _graph + '-slider',
+    #                 min=0,
+    #                 max=1,
+    #                 step=0.1,
+    #                 value=0,
+    #             )])
+    #     )
+
     for solver in sorted(solvers):
         # -----------new addition -----
-        train_perf_trace = {
-            'x': [_ + 1 for _ in range(len(train_perf_data[solver]))],
-            'y': train_perf_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
-        exploration_trace = {
-            'x': [_ + 1 for _ in range(len(exploration_data[solver]))],
-            'y': exploration_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
-        experiance_trace = {
-            'x': [_ + 1 for _ in range(len(experience_data[solver]))],
-            'y': experience_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        if solver in train_perf_data:
+            train_perf_trace = {
+                'x': np.array([_ + 1 for _ in range(len(train_perf_data[solver]))]) * interval,
+                'y': train_perf_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            train_perf_traces.append(train_perf_trace)
+        if solver in exploration_data:
+            exploration_trace = {
+                'x': np.array([_ + 1 for _ in range(len(exploration_data[solver]))]) * interval,
+                'y': exploration_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            exploration_traces.append(exploration_trace)
+        if solver in experience_data:
+            experiance_trace = {
+                'x': np.array([_ + 1 for _ in range(len(experience_data[solver]))]) * interval,
+                'y': experience_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            experiance_traces.append(experiance_trace)
 
-        train_loss_trace = {
-            'x': [_ + 1 for _ in range(len(train_loss_data[solver]))],
-            'y': train_loss_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        if solver in train_loss_data:
+            train_loss_trace = {
+                'x': np.array([_ + 1 for _ in range(len(train_loss_data[solver]))]) * interval,
+                'y': train_loss_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            train_loss_traces.append(train_loss_trace)
 
         # --------------------------------
-        train_trace = {
-            'x': [_ + 1 for _ in range(len(train_data[solver]))],
-            'y': train_data[solver],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
-        run_mean_trace = {
-            'x': [_ + 1 for _ in range(len(train_data[solver]))],
-            'y': [np.average(train_data[solver][max(0, i - 10):i + 1]) for i in range(len(train_data[solver]) - 1)],
-            'type': 'scatter',
-            'mode': 'lines',
-            'name': solver,
-            'line': {'color': solver_colors[solver]}
-        }
+        if solver in train_data:
+            train_trace = {
+                'x': np.array([_ + 1 for _ in range(len(train_data[solver]))]) * interval,
+                'y': train_data[solver],
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': solver,
+                'line': {'color': solver_colors[solver]}
+            }
+            train_traces.append(train_trace)
+        # run_mean_trace = {
+        #     'x': [_ + 1 for _ in range(len(train_data[solver]))],
+        #     'y': [np.average(train_data[solver][max(0, i - 10):i + 1]) for i in range(len(train_data[solver]) - 1)],
+        #     'type': 'scatter',
+        #     'mode': 'lines',
+        #     'name': solver,
+        #     'line': {'color': solver_colors[solver]}
+        # }
         if solver in q_val_dev_data:
             q_val_dev_trace = {
-                'x': [_ + 1 for _ in range(len(q_val_dev_data[solver]))],
+                'x': np.array([_ + 1 for _ in range(len(q_val_dev_data[solver]))]) * interval,
                 'y': q_val_dev_data[solver],
                 'type': 'scatter',
                 'mode': 'lines',
@@ -533,7 +583,7 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
             q_val_dev_traces.append(q_val_dev_trace)
         if solver in policy_eval_data:
             policy_eval_trace = {
-                'x': [_ + 1 for _ in range(len(policy_eval_data[solver]))],
+                'x': np.array([_ + 1 for _ in range(len(policy_eval_data[solver]))]) * interval,
                 'y': policy_eval_data[solver],
                 'type': 'scatter',
                 'mode': 'lines',
@@ -559,12 +609,8 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'marker': {'color': solver_colors[solver]}
             }
             last_policy_test_data.append(last_policy_trace)
-        train_traces.append(train_trace)
-        run_mean_traces.append(run_mean_trace)
-        train_loss_traces.append(train_loss_trace)
-        exploration_traces.append(exploration_trace)
-        experiance_traces.append(experiance_trace)
-        train_perf_traces.append(train_perf_trace)
+
+        # run_mean_traces.append(run_mean_trace)
 
     # ----- new addition --
     train_perf_graph = html.Div(className='graph_box', children=[
@@ -575,7 +621,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Training Episodes Score',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
@@ -587,7 +635,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Exploration Rate',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'epsilon'}
                 }
             }
         )])
@@ -599,7 +649,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Experiance',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Memory Size'}
                 }
             }
         )])
@@ -611,7 +663,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Training Loss',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': ''}
                 }
             }
         )])
@@ -624,22 +678,24 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Testing Score',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
-    run_mean_graph = html.Div(className='graph_box', children=[
-        dcc.Graph(
-            id=prefix + '-run_mean',
-            figure={
-                'data': run_mean_traces,
-                'layout': {
-                    'title': 'Testing Running Mean',
-                    'showlegend': True,
-                    'showgrid': True
-                }
-            }
-        )])
+    # run_mean_graph = html.Div(className='graph_box', children=[
+    #     dcc.Graph(
+    #         id=prefix + '-run_mean',
+    #         figure={
+    #             'data': run_mean_traces,
+    #             'layout': {
+    #                 'title': 'Testing Running Mean',
+    #                 'showlegend': True,
+    #                 'showgrid': True
+    #             }
+    #         }
+    #     )])
     q_val_dev_graph = html.Div(className='graph_box', children=[
         dcc.Graph(
             id=prefix + '-q_val_dev',
@@ -648,7 +704,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Q value Deviation',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Q-value Deviation'}
                 }
             }
         )])
@@ -660,7 +718,9 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Policy Evaluation Deviation',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'xaxis': {'title': 'Episodes'},
+                    'yaxis': {'title': 'Q-value Deviation'}
                 }
             }
         )])
@@ -672,7 +732,8 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Evaluation of Best Policy',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
@@ -684,15 +745,20 @@ def train_page_layout(app, train_data, train_perf_data, exploration_data, experi
                 'layout': {
                     'title': 'Evaluation of Last Policy',
                     'showlegend': True,
-                    'showgrid': True
+                    'showgrid': True,
+                    'yaxis': {'title': 'Average Score'}
                 }
             }
         )])
-    info_box = html.Div(children='Runs:' + str(runs),className='info_box')
+    info_box = html.Div(children='Runs:' + str(runs), className='info_box')
 
-    layout_children = [info_box,train_graph, run_mean_graph, train_perf_graph,
+    # layout_children = [info_box, train_graph, run_mean_graph, train_perf_graph,
+    #                    train_loss_graph, exploration_graph, experience_graph,
+    #                    best_policy_graph, last_policy_graph]
+    layout_children = [info_box, train_graph, train_perf_graph,
                        train_loss_graph, exploration_graph, experience_graph,
                        best_policy_graph, last_policy_graph]
+
     if len(q_val_dev_data) > 0:
         layout_children.append(q_val_dev_graph)
     if len(policy_eval_data) > 0:
@@ -712,7 +778,7 @@ def visualize_results(result_path, host, port):
             if os.path.isdir(os.path.join(result_path, o))]
     index_children = []
     layouts = {}
-    reward_colors = {'reward': Color(pick_for='reward', saturation=0.5, luminance=0.5).get_hex()}
+    # solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
     for env, env_path in envs:
         layouts[env] = {}
         best_x_path = os.path.join(env_path, 'x_data_best.p')
@@ -726,8 +792,12 @@ def visualize_results(result_path, host, port):
             _path = '/' + prefix
             train_page = dcc.Link(env + ': Training ', href=_path, className='page_url')
             train_data = pickle.load(open(train_path, 'rb'))
-            if 'policy_eval' not in train_data.keys():
-                train_data['policy_eval'] = {}
+
+            for unknown_key in ['policy_eval', 'train_perf', 'exploration', 'experience', 'train_loss', 'run_mean',
+                                'q_val_dev']:
+                if unknown_key not in train_data.keys():
+                    train_data[unknown_key] = {}
+
             best_test_data = pickle.load(open(best_test_path, 'rb')) if os.path.exists(best_test_path) else {}
             last_test_data = pickle.load(open(last_test_path, 'rb')) if os.path.exists(last_test_path) else {}
             layouts[_path] = train_page_layout(app, train_data['data'], train_data['train_perf'],
@@ -741,6 +811,10 @@ def visualize_results(result_path, host, port):
             env_list.append(train_page)
             env_list.append(html.Br())
 
+        # solver_colors = {s: cl.scales['7']['qual']['Dark2'][i] for i, s in enumerate(sorted(solvers))}
+        _colors = copy.deepcopy(cl.scales['8']['qual']['Dark2'])
+        reward_colors = {'reward': _colors.pop()}
+
         for x_path in [best_x_path, last_x_path]:
             if os.path.exists(x_path):
                 suffix = x_path.split('_')[-1].split('.')[0]
@@ -751,7 +825,10 @@ def visualize_results(result_path, host, port):
 
                 for rt in x_data['reward_types']:
                     if rt not in reward_colors:
-                        reward_colors[rt] = Color(pick_for=rt, saturation=0.5, luminance=0.5).get_hex()
+                        if len(_colors) != 0:
+                            reward_colors[rt] = _colors.pop()
+                        else:
+                            reward_colors[rt] = Color(pick_for=rt, saturation=0.5, luminance=0.5).get_hex()
 
                 layouts[_path] = x_layout(app, x_data['data'], reward_colors,
                                           x_data['actions'], prefix)

@@ -69,7 +69,6 @@ class HRA(_BaseDeepLearner):
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), 20)
             self.optimizer.step()
-
             self.step_count += 1
 
             if (self.step_count % self.update_target_interval) == 0:

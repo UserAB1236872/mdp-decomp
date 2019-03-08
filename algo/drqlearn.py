@@ -12,6 +12,10 @@ class DRQLearn(_BaseTableLearner):
     def __name__(self):
         return 'drqlearn' if self.use_decomposition else 'qlearn'
 
+    @property
+    def __name__(self):
+        return 'drQ learning' if self.use_decomposition else 'Q learning'
+
     def _update(self, state, action, next_state, reward, done):
         next_state_action = self.act(next_state)
         for rt, r in enumerate(reward):

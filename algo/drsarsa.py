@@ -12,6 +12,10 @@ class DRSarsa(_BaseTableLearner):
     def __name__(self):
         return 'drsarsa' if self.use_decomposition else 'sarsa'
 
+    @property
+    def __name__(self):
+        return 'drSarsa' if self.use_decomposition else 'sarsa'
+
     def _update(self, state, action, next_state, next_state_action, reward, done):
         for rt, r in enumerate(reward):
             target = r
