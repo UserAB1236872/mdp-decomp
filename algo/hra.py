@@ -15,7 +15,7 @@ class HRA(_BaseDeepLearner):
     """
 
     def __init__(self, env, model, lr, discount, mem_len, batch_size, min_eps, max_eps, total_episodes,
-                 update_target_interval=1, use_cuda=False, max_episode_steps=100000, use_decomposition=True):
+                 update_target_interval=100, use_cuda=False, max_episode_steps=100000, use_decomposition=True):
         super().__init__(model, update_target_interval, use_cuda, env, lr, discount, min_eps, max_eps, total_episodes,
                          max_episode_steps, use_decomposition)
 
