@@ -45,40 +45,41 @@ class SolutionMonitor(object):
             self.colors[name] = Category10[10][i]
 
     def compute_deviations(self, solver, solver_name, idx):
-        eval_max = -np.inf
-        eval_avg = 0.0
-        eval_avg_denom = 0.0
-        eval_avg_max_norm = 0.0
-        typed_maxes = {}
-
-        total_max_deviations = -np.inf
-
-        for action in self.world.actions:
-            for r_type in self.world.rewards.keys():
-                abs_distance = np.abs(self.exact.values[action][r_type] -
-                                      solver.q_vals[action][r_type])
-                eval_max = max(eval_max, np.max(abs_distance))
-                eval_avg = eval_avg + np.sum(abs_distance)
-                eval_avg_denom += self.world.shape[0] * self.world.shape[1]
-                eval_avg_max_norm += eval_max
-
-                typed_maxes[r_type] = -np.inf if \
-                    r_type not in typed_maxes else typed_maxes[r_type]
-                typed_maxes[r_type] = max(
-                    typed_maxes[r_type], np.max(abs_distance))
-
-            total_max_deviations = max(total_max_deviations, np.max(
-                np.abs(solver.total[action] - self.exact.total[action])))
-
-        for r_type, val in typed_maxes.items():
-            self.typed_max_dev[solver_name][r_type][idx] += val
-
-        self.max_deviations[solver_name][idx] += eval_max
-        self.avg_deviations[solver_name][idx] += eval_avg / eval_avg_denom
-        self.total_max_deviations[solver_name][idx] += total_max_deviations
-        self.avg_max_deviation[solver_name][idx] += \
-            eval_avg_max_norm / (len(self.world.actions)
-                                 * len(self.world.rewards))
+        # eval_max = -np.inf
+        # eval_avg = 0.0
+        # eval_avg_denom = 0.0
+        # eval_avg_max_norm = 0.0
+        # typed_maxes = {}
+        #
+        # total_max_deviations = -np.inf
+        #
+        # for action in self.world.actions:
+        #     for r_type in self.world.rewards.keys():
+        #         abs_distance = np.abs(self.exact.values[action][r_type] -
+        #                               solver.q_vals[action][r_type])
+        #         eval_max = max(eval_max, np.max(abs_distance))
+        #         eval_avg = eval_avg + np.sum(abs_distance)
+        #         eval_avg_denom += self.world.shape[0] * self.world.shape[1]
+        #         eval_avg_max_norm += eval_max
+        #
+        #         typed_maxes[r_type] = -np.inf if \
+        #             r_type not in typed_maxes else typed_maxes[r_type]
+        #         typed_maxes[r_type] = max(
+        #             typed_maxes[r_type], np.max(abs_distance))
+        #
+        #     total_max_deviations = max(total_max_deviations, np.max(
+        #         np.abs(solver.total[action] - self.exact.total[action])))
+        #
+        # for r_type, val in typed_maxes.items():
+        #     self.typed_max_dev[solver_name][r_type][idx] += val
+        #
+        # self.max_deviations[solver_name][idx] += eval_max
+        # self.avg_deviations[solver_name][idx] += eval_avg / eval_avg_denom
+        # self.total_max_deviations[solver_name][idx] += total_max_deviations
+        # self.avg_max_deviation[solver_name][idx] += \
+        #     eval_avg_max_norm / (len(self.world.actions)
+        #                          * len(self.world.rewards))
+        pass
 
     def run_step(self):
         if self.curr_index == len(self.samples):

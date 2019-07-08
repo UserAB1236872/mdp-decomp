@@ -1,10 +1,8 @@
 def main():
     from gridworld.worlds import CliffWorld
     from solvers.q_iter import QIter
-    from explorers.q_learn import QLearn
-    from explorers.sarsa import Sarsa
-    from explorers.dqn import DQN
-    from explorers.dqn.model import RewardMajorModel, DecompDQNModel
+    from explorers.q_learn_pres_future import  QLearnPresFuture
+    # from explorers.q_learn import QLearn
     from monitors.closeness import SolutionMonitor
     import numpy as np
     import logging
@@ -14,15 +12,7 @@ def main():
 
     world = CliffWorld()
 
-    # def make_dqn(w, verbose=True):
-    #     return DQN(w, RewardMajorModel, DQNLinear, verbose=verbose)
-    def make_dqn(w, verbose=True, max_episodes=None):
-        return DQN(w, DecompDQNModel, RewardMajorModel, verbose=verbose, max_episodes=max_episodes)
-
-    explorers = [QLearn, Sarsa, make_dqn]
-    # explorers = [Sarsa]
-    # explorers = [QLearn]
-    # explorers = [make_dqn]
+    explorers = [QLearnPresFuture]
     exact = QIter
 
     monitor = SolutionMonitor(world, exact, explorers, max_steps=20000)
