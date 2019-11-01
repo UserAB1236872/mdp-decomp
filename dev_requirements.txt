@@ -12,7 +12,7 @@ mccabe==0.6.1
 more-itertools==4.3.0
 numpy==1.15.4
 packaging==18.0
-Pillow==5.3.0
+Pillow==6.2.0
 pluggy==0.8.0
 PTable==0.9.2
 py==1.7.0
